@@ -1,3 +1,10 @@
+/* ======================= chart.js defaults ======================= */
+if (window.Chart) {
+  Chart.defaults.font.family = "-apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = '#6b7688';
+}
+
 /* ======================= api ======================= */
 const API_BASE = '/.netlify/functions';
 let allRows = [];
@@ -315,7 +322,10 @@ function renderChartSetor() {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+      scales: {
+        x: { ticks: { font: { size: 10 }, maxRotation: 35, minRotation: 0, autoSkip: false } },
+        y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } }
+      }
     }
   });
 }
@@ -352,7 +362,10 @@ function renderChartConvenio() {
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
-      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+      scales: {
+        x: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
+        y: { ticks: { font: { size: 10 } } }
+      }
     }
   });
 }
@@ -367,7 +380,10 @@ function renderChartMedicos() {
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
-      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+      scales: {
+        x: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
+        y: { ticks: { font: { size: 10 } } }
+      }
     }
   });
 }
@@ -387,7 +403,10 @@ function renderChartPacientes() {
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
-      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+      scales: {
+        x: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
+        y: { ticks: { font: { size: 10 } } }
+      }
     }
   });
 }
