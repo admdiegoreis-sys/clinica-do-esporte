@@ -43,6 +43,21 @@ function fmtDate(d) {
   return dt.toLocaleDateString('pt-BR');
 }
 
+function localDateKey(d) {
+  if (!d) return null;
+  const dt = new Date(d);
+  if (isNaN(dt)) return null;
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const day = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function localMonthKey(d) {
+  const key = localDateKey(d);
+  return key ? key.slice(0, 7) : null;
+}
+
 function fmtDateTime(d) {
   if (!d) return '—';
   const dt = new Date(d);
@@ -141,8 +156,8 @@ function getFilters() {
 function applyFilters() {
   const f = getFilters();
   filteredRows = allRows.filter(r => {
-    if (f.dataIni && (!r.dt_requisicao || r.dt_requisicao.slice(0, 10) < f.dataIni)) return false;
-    if (f.dataFim && (!r.dt_requisicao || r.dt_requisicao.slice(0, 10) > f.dataFim)) return false;
+    if (f.dataIni && (!r.dt_requisicao || localDateKey(r.dt_requisicao) < f.dataIni)) return false;
+    if (f.dataFim && (!r.dt_requisicao || localDateKey(r.dt_requisicao) > f.dataFim)) return false;
     if (f.convenio && r.convenio !== f.convenio) return false;
     if (f.setor && r.setor !== f.setor) return false;
     if (f.exame && r.exame !== f.exame) return false;
@@ -182,7 +197,7 @@ function renderKpis() {
   const rows = filteredRows;
   const total = rows.length;
   const pacientes = new Set(rows.map(r => normalizeName(r.paciente))).size;
-  const dias = new Set(rows.filter(r => r.dt_requisicao).map(r => r.dt_requisicao.slice(0, 10))).size;
+  const dias = new Set(rows.filter(r => r.dt_requisicao).map(r => localDateKey(r.dt_requisicao))).size;
   const media = dias > 0 ? total / dias : 0;
 
   const temposLaudo = rows
@@ -213,14 +228,18 @@ function renderChartEvolucao() {
   const buckets = new Map();
   filteredRows.forEach(r => {
     if (!r.dt_requisicao) return;
-    const key = evolucaoGranularidade === 'mes' ? r.dt_requisicao.slice(0, 7) : r.dt_requisicao.slice(0, 10);
+    const key = evolucaoGranularidade === 'mes' ? localMonthKey(r.dt_requisicao) : localDateKey(r.dt_requisicao);
+    if (!key) return;
     buckets.set(key, (buckets.get(key) || 0) + 1);
   });
   const labels = [...buckets.keys()].sort();
   const data = labels.map(l => buckets.get(l));
-  const labelsFmt = labels.map(l => evolucaoGranularidade === 'mes'
-    ? new Date(l + '-01').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
-    : new Date(l).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
+  const labelsFmt = labels.map(l => {
+    const [y, m, d] = l.split('-').map(Number);
+    return evolucaoGranularidade === 'mes'
+      ? new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })
+      : new Date(y, m - 1, d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  });
 
   upsertChart('chart-evolucao', {
     type: 'line',
