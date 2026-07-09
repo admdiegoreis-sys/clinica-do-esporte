@@ -634,11 +634,6 @@ function setupFiltros() {
   document.getElementById('f-solicitante').addEventListener('input', debounce(applyFilters, 250));
   document.getElementById('f-busca-tabela').addEventListener('input', debounce(applyFilters, 250));
   document.getElementById('btn-limpar-filtros').addEventListener('click', limparFiltros);
-  document.getElementById('btn-mais-filtros').addEventListener('click', () => {
-    const extra = document.getElementById('filters-extra');
-    extra.hidden = !extra.hidden;
-    document.getElementById('btn-mais-filtros').textContent = extra.hidden ? 'Mais filtros ▾' : 'Menos filtros ▴';
-  });
 }
 
 function debounce(fn, ms) {
