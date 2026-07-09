@@ -1,6 +1,5 @@
-/* ======================= config / conexão ======================= */
-const CFG_KEY = 'clinica_supabase_config';
-let sb = null;
+/* ======================= api ======================= */
+const API_BASE = '/.netlify/functions';
 let allRows = [];
 let filteredRows = [];
 let currentPage = 1;
@@ -8,20 +7,14 @@ const PAGE_SIZE = 25;
 let evolucaoGranularidade = 'dia';
 const charts = {};
 
-function getConfig() {
-  try { return JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); }
-  catch { return null; }
-}
-
-function saveConfig(url, key) {
-  localStorage.setItem(CFG_KEY, JSON.stringify({ url, key }));
-}
-
-function initClient() {
-  const cfg = getConfig();
-  if (!cfg || !cfg.url || !cfg.key) return false;
-  sb = window.supabase.createClient(cfg.url, cfg.key);
-  return true;
+async function api(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...options
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.error || `Erro ${res.status} ao acessar o banco de dados.`);
+  return payload;
 }
 
 /* ======================= util ======================= */
@@ -70,26 +63,20 @@ const CHART_COLORS = ['#1f6feb', '#4a90e2', '#7dd3fc', '#0b3d91', '#a5b4fc', '#9
 
 /* ======================= carregamento de dados ======================= */
 async function fetchAllRows() {
-  let all = [];
-  let from = 0;
-  const pageSize = 1000;
-  while (true) {
-    const { data, error } = await sb.from('exames').select('*').order('dt_requisicao', { ascending: false }).range(from, from + pageSize - 1);
-    if (error) throw error;
-    all = all.concat(data);
-    if (!data.length || data.length < pageSize) break;
-    from += pageSize;
-  }
-  return all;
+  return api('/exames');
 }
 
 async function loadData() {
-  if (!sb) return;
+  const statusEl = document.getElementById('import-status');
   try {
     allRows = await fetchAllRows();
   } catch (e) {
     console.error(e);
     allRows = [];
+    if (statusEl) {
+      statusEl.textContent = 'Erro ao carregar dados: ' + e.message;
+      statusEl.className = 'import-status error';
+    }
   }
   populateFilterOptions();
   applyFilters();
@@ -473,7 +460,7 @@ async function handleExcelFile(file) {
 }
 
 async function confirmarImportacao() {
-  if (!pendingImportRows || !sb) return;
+  if (!pendingImportRows) return;
   const modo = document.querySelector('input[name="import-mode"]:checked').value;
   const btn = document.getElementById('btn-confirmar-importacao');
   const statusEl = document.getElementById('import-status');
@@ -486,15 +473,13 @@ async function confirmarImportacao() {
   try {
     if (modo === 'substituir') {
       statusEl.textContent = 'Removendo dados atuais...';
-      const { error: delError } = await sb.from('exames').delete().gt('id', 0);
-      if (delError) throw delError;
+      await api('/exames', { method: 'DELETE', body: JSON.stringify({ all: true }) });
     }
 
     const CHUNK = 500;
     for (let i = 0; i < mapped.length; i += CHUNK) {
       statusEl.textContent = `Importando registros ${i + 1} a ${Math.min(i + CHUNK, mapped.length)} de ${mapped.length}...`;
-      const { error } = await sb.from('exames').insert(mapped.slice(i, i + CHUNK));
-      if (error) throw error;
+      await api('/exames', { method: 'POST', body: JSON.stringify({ rows: mapped.slice(i, i + CHUNK) }) });
     }
 
     statusEl.textContent = `Importação concluída: ${fmtInt(mapped.length)} registros.`;
@@ -592,26 +577,6 @@ function setupImport() {
   document.getElementById('btn-confirmar-importacao').addEventListener('click', confirmarImportacao);
 }
 
-function setupConfigModal() {
-  const modal = document.getElementById('modal-config');
-  document.getElementById('btn-config').addEventListener('click', () => {
-    const cfg = getConfig();
-    document.getElementById('cfg-url').value = cfg?.url || '';
-    document.getElementById('cfg-key').value = cfg?.key || '';
-    modal.hidden = false;
-  });
-  document.getElementById('btn-cfg-cancelar').addEventListener('click', () => { modal.hidden = true; });
-  document.getElementById('btn-cfg-salvar').addEventListener('click', async () => {
-    const url = document.getElementById('cfg-url').value.trim();
-    const key = document.getElementById('cfg-key').value.trim();
-    if (!url || !key) return;
-    saveConfig(url, key);
-    initClient();
-    modal.hidden = true;
-    await loadData();
-  });
-}
-
 /* ======================= init ======================= */
 window.addEventListener('DOMContentLoaded', () => {
   setupNav();
@@ -619,11 +584,5 @@ window.addEventListener('DOMContentLoaded', () => {
   setupToggleEvolucao();
   setupPaginacao();
   setupImport();
-  setupConfigModal();
-
-  if (initClient()) {
-    loadData();
-  } else {
-    document.getElementById('modal-config').hidden = false;
-  }
+  loadData();
 });

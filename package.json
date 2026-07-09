@@ -1,0 +1,12 @@
+{
+  "name": "clinica-do-esporte",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Painel de atendimentos - Hospital Clinica do Esporte.",
+  "scripts": {
+    "check": "node --check app.js && node --check netlify/functions/_db.mjs && node --check netlify/functions/exames.mjs && node --check netlify/functions/db-health.mjs"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0"
+  }
+}

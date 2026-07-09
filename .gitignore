@@ -5,3 +5,4 @@
 .netlify/
 .claude/
 node_modules/
+deno.lock

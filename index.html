@@ -7,7 +7,6 @@
 <link rel="icon" href="data:,">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -22,7 +21,6 @@
   <nav class="topbar-nav">
     <button class="nav-btn active" data-view="painel">Painel</button>
     <button class="nav-btn" data-view="importar">Importar dados</button>
-    <button class="nav-btn nav-btn-icon" id="btn-config" title="Configurar conexão">⚙</button>
   </nav>
 </header>
 
@@ -204,22 +202,6 @@
   </section>
 
 </main>
-
-<!-- ===================== MODAL CONFIG ===================== -->
-<div id="modal-config" class="modal-overlay" hidden>
-  <div class="modal-box">
-    <h2>Conexão com o banco de dados</h2>
-    <p class="import-hint">Informe a URL e a chave anônima (anon key) do projeto Supabase.</p>
-    <label>Supabase URL</label>
-    <input type="text" id="cfg-url" placeholder="https://xxxxxxxxxxxx.supabase.co">
-    <label>Supabase anon key</label>
-    <input type="text" id="cfg-key" placeholder="chave anônima (anon key)">
-    <div class="modal-actions">
-      <button id="btn-cfg-cancelar" class="btn-secondary">Cancelar</button>
-      <button id="btn-cfg-salvar" class="btn-primary">Salvar e conectar</button>
-    </div>
-  </div>
-</div>
 
 <script src="app.js"></script>
 </body>

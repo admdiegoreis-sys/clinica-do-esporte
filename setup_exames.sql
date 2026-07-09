@@ -38,33 +38,3 @@ create index if not exists exames_exame_idx on public.exames(exame);
 create index if not exists exames_solicitante_idx on public.exames(solicitante);
 create index if not exists exames_paciente_idx on public.exames(paciente);
 create index if not exists exames_lote_importacao_idx on public.exames(lote_importacao);
-
-alter table public.exames enable row level security;
-
-drop policy if exists "exames_select" on public.exames;
-drop policy if exists "exames_insert" on public.exames;
-drop policy if exists "exames_update" on public.exames;
-drop policy if exists "exames_delete" on public.exames;
-
-create policy "exames_select"
-on public.exames for select
-to anon
-using (true);
-
-create policy "exames_insert"
-on public.exames for insert
-to anon
-with check (true);
-
-create policy "exames_update"
-on public.exames for update
-to anon
-using (true)
-with check (true);
-
-create policy "exames_delete"
-on public.exames for delete
-to anon
-using (true);
-
-notify pgrst, 'reload schema';
