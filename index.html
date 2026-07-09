@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Atendimentos — Hospital Clínica do Esporte</title>
+<link rel="icon" href="data:,">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-brand">
+    <img id="logo" src="logo.png" alt="Hospital Clínica do Esporte" class="brand-logo">
+    <div class="brand-text">
+      <h1>Painel de Atendimentos</h1>
+    </div>
+  </div>
+  <nav class="topbar-nav">
+    <button class="nav-btn active" data-view="painel">Painel</button>
+    <button class="nav-btn" data-view="importar">Importar dados</button>
+    <button class="nav-btn nav-btn-icon" id="btn-config" title="Configurar conexão">⚙</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ===================== PAINEL ===================== -->
+  <section id="view-painel" class="view active">
+
+    <div class="filters-bar">
+      <div class="filter-group">
+        <label>Período (requisição)</label>
+        <div class="filter-range">
+          <input type="date" id="f-data-ini">
+          <span>até</span>
+          <input type="date" id="f-data-fim">
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Convênio</label>
+        <select id="f-convenio"><option value="">Todos</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Setor</label>
+        <select id="f-setor"><option value="">Todos</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Exame</label>
+        <select id="f-exame"><option value="">Todos</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Situação</label>
+        <select id="f-situacao"><option value="">Todas</option></select>
+      </div>
+      <div class="filter-group filter-grow">
+        <label>Médico solicitante</label>
+        <input type="text" id="f-solicitante" list="dl-solicitantes" placeholder="Buscar médico...">
+        <datalist id="dl-solicitantes"></datalist>
+      </div>
+      <div class="filter-group filter-actions">
+        <button id="btn-limpar-filtros" class="btn-secondary">Limpar filtros</button>
+      </div>
+    </div>
+
+    <div class="kpi-row" id="kpi-row">
+      <div class="kpi-card">
+        <span class="kpi-label">Total de exames</span>
+        <span class="kpi-value" id="kpi-total">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Pacientes únicos</span>
+        <span class="kpi-value" id="kpi-pacientes">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Dias com atendimento</span>
+        <span class="kpi-value" id="kpi-dias">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Média de exames/dia</span>
+        <span class="kpi-value" id="kpi-media">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Tempo médio até laudo</span>
+        <span class="kpi-value" id="kpi-tempo-laudo">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">% Concluído (laudado/entregue)</span>
+        <span class="kpi-value" id="kpi-concluido">—</span>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-card chart-wide">
+        <div class="chart-card-head">
+          <h3>Evolução de exames</h3>
+          <div class="chart-toggle" id="toggle-evolucao">
+            <button class="toggle-btn active" data-gran="dia">Dia</button>
+            <button class="toggle-btn" data-gran="mes">Mês</button>
+          </div>
+        </div>
+        <canvas id="chart-evolucao"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>Exames por setor</h3>
+        <canvas id="chart-setor"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>Exames por categoria</h3>
+        <canvas id="chart-categoria"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>Exames por convênio</h3>
+        <canvas id="chart-convenio"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>Top 10 médicos solicitantes</h3>
+        <canvas id="chart-medicos"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>Situação dos exames</h3>
+        <canvas id="chart-situacao"></canvas>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-card-head">
+        <h3>Exames (detalhado)</h3>
+        <input type="text" id="f-busca-tabela" placeholder="Buscar paciente, exame, médico...">
+        <span class="table-count" id="tabela-count"></span>
+      </div>
+      <div class="table-scroll">
+        <table id="tabela-exames">
+          <thead>
+            <tr>
+              <th>Requisição</th>
+              <th>Paciente</th>
+              <th>Exame</th>
+              <th>Convênio</th>
+              <th>Setor</th>
+              <th>Situação</th>
+              <th>Solicitante</th>
+              <th>Laudista</th>
+              <th>Data laudo</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-exames-body"></tbody>
+        </table>
+      </div>
+      <div class="table-pagination">
+        <button id="btn-prev-page" class="btn-secondary">Anterior</button>
+        <span id="pagina-info"></span>
+        <button id="btn-next-page" class="btn-secondary">Próxima</button>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ===================== IMPORTAR ===================== -->
+  <section id="view-importar" class="view">
+
+    <div class="import-card">
+      <h2>Importar planilha (Excel)</h2>
+      <p class="import-hint">Envie o arquivo exportado no layout da aba <strong>Base</strong> (.xlsx). As colunas devem seguir o padrão: ID, Rex.ID, Tipo, Situação, Exec., Dt.Requisição, Previsão, Paciente, Cp, Lado, Exame, Convênio, Solicitante, Laudista, Executante, Usuário Resp. Rex, Técnico, Setor, Usuário Digitou, Data/Hora Digitação, Log de Usuário Laudo, Usuário Resp. Laudo, Data Laudo, Médico Autenticador, Médico Revisor, Empresa.</p>
+
+      <div class="import-drop" id="drop-excel">
+        <input type="file" id="input-excel" accept=".xlsx,.xls" hidden>
+        <span>Arraste o arquivo .xlsx aqui ou clique para selecionar</span>
+      </div>
+
+      <div class="import-preview" id="import-preview" hidden>
+        <p><strong id="import-preview-count"></strong> registros detectados no arquivo.</p>
+        <div class="import-mode">
+          <label><input type="radio" name="import-mode" value="substituir" checked> Substituir toda a base (recomendado — remove os dados atuais e importa este arquivo)</label>
+          <label><input type="radio" name="import-mode" value="adicionar"> Adicionar aos dados existentes</label>
+        </div>
+        <button id="btn-confirmar-importacao" class="btn-primary">Confirmar importação</button>
+      </div>
+
+      <div id="import-status" class="import-status"></div>
+    </div>
+
+    <div class="import-card">
+      <h2>Importar XML</h2>
+      <p class="import-hint">Importação via XML (mesmo layout da aba Base) — aguardando um arquivo modelo para ajuste do mapeamento de campos. Por enquanto, utilize a importação por Excel acima.</p>
+      <div class="import-drop import-drop-disabled">
+        <span>Em breve</span>
+      </div>
+    </div>
+
+    <div class="import-card">
+      <h2>Histórico de importações</h2>
+      <div id="import-historico" class="import-historico"></div>
+    </div>
+
+  </section>
+
+</main>
+
+<!-- ===================== MODAL CONFIG ===================== -->
+<div id="modal-config" class="modal-overlay" hidden>
+  <div class="modal-box">
+    <h2>Conexão com o banco de dados</h2>
+    <p class="import-hint">Informe a URL e a chave anônima (anon key) do projeto Supabase.</p>
+    <label>Supabase URL</label>
+    <input type="text" id="cfg-url" placeholder="https://xxxxxxxxxxxx.supabase.co">
+    <label>Supabase anon key</label>
+    <input type="text" id="cfg-key" placeholder="chave anônima (anon key)">
+    <div class="modal-actions">
+      <button id="btn-cfg-cancelar" class="btn-secondary">Cancelar</button>
+      <button id="btn-cfg-salvar" class="btn-primary">Salvar e conectar</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

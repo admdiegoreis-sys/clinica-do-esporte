@@ -1,0 +1,7 @@
+*.zip
+*.xlsx
+*.xls
+*.tmp
+.netlify/
+.claude/
+node_modules/
