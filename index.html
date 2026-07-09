@@ -55,12 +55,45 @@
         <select id="f-situacao"><option value="">Todas</option></select>
       </div>
       <div class="filter-group filter-grow">
+        <label>Paciente</label>
+        <input type="text" id="f-paciente" list="dl-pacientes" placeholder="Buscar paciente...">
+        <datalist id="dl-pacientes"></datalist>
+      </div>
+      <div class="filter-group filter-grow">
         <label>Médico solicitante</label>
         <input type="text" id="f-solicitante" list="dl-solicitantes" placeholder="Buscar médico...">
         <datalist id="dl-solicitantes"></datalist>
       </div>
       <div class="filter-group filter-actions">
+        <button id="btn-mais-filtros" class="btn-secondary">Mais filtros ▾</button>
         <button id="btn-limpar-filtros" class="btn-secondary">Limpar filtros</button>
+      </div>
+    </div>
+
+    <div class="filters-bar filters-bar-extra" id="filters-extra" hidden>
+      <div class="filter-group">
+        <label>Período (laudo)</label>
+        <div class="filter-range">
+          <input type="date" id="f-laudo-data-ini">
+          <span>até</span>
+          <input type="date" id="f-laudo-data-fim">
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Laudista</label>
+        <select id="f-laudista"><option value="">Todos</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Executante</label>
+        <select id="f-executante"><option value="">Todos</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Técnico</label>
+        <select id="f-tecnico"><option value="">Todos</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Empresa</label>
+        <select id="f-empresa"><option value="">Todas</option></select>
       </div>
     </div>
 
@@ -126,6 +159,11 @@
       <div class="chart-card">
         <h3>Situação dos exames</h3>
         <canvas id="chart-situacao"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>Top 10 pacientes (mais exames)</h3>
+        <canvas id="chart-pacientes"></canvas>
       </div>
     </div>
 

@@ -105,6 +105,11 @@ function populateFilterOptions() {
   const exames = [...new Set(allRows.map(r => r.exame).filter(Boolean))].sort();
   const situacoes = [...new Set(allRows.map(r => r.situacao).filter(Boolean))];
   const solicitantes = [...new Set(allRows.map(r => r.solicitante).filter(Boolean))].sort();
+  const pacientes = [...new Set(allRows.map(r => r.paciente).filter(Boolean))].sort();
+  const laudistas = [...new Set(allRows.map(r => r.laudista).filter(Boolean))].sort();
+  const executantes = [...new Set(allRows.map(r => r.executante).filter(Boolean))].sort();
+  const tecnicos = [...new Set(allRows.map(r => r.tecnico).filter(Boolean))].sort();
+  const empresas = [...new Set(allRows.map(r => r.empresa).filter(Boolean))].sort();
 
   const ordemSituacao = ['Solicitado', 'Em Laudo', 'Laudado', 'Entregue'];
   situacoes.sort((a, b) => {
@@ -116,9 +121,16 @@ function populateFilterOptions() {
   fillSelect('f-setor', setores);
   fillSelect('f-exame', exames);
   fillSelect('f-situacao', situacoes);
+  fillSelect('f-laudista', laudistas);
+  fillSelect('f-executante', executantes);
+  fillSelect('f-tecnico', tecnicos);
+  fillSelect('f-empresa', empresas);
 
   const dl = document.getElementById('dl-solicitantes');
   dl.innerHTML = solicitantes.map(s => `<option value="${escapeHtml(s)}">`).join('');
+
+  const dlPacientes = document.getElementById('dl-pacientes');
+  dlPacientes.innerHTML = pacientes.map(p => `<option value="${escapeHtml(p)}">`).join('');
 }
 
 function fillSelect(id, values) {
@@ -144,10 +156,17 @@ function getFilters() {
   return {
     dataIni: document.getElementById('f-data-ini').value,
     dataFim: document.getElementById('f-data-fim').value,
+    laudoDataIni: document.getElementById('f-laudo-data-ini').value,
+    laudoDataFim: document.getElementById('f-laudo-data-fim').value,
     convenio: document.getElementById('f-convenio').value,
     setor: document.getElementById('f-setor').value,
     exame: document.getElementById('f-exame').value,
     situacao: document.getElementById('f-situacao').value,
+    laudista: document.getElementById('f-laudista').value,
+    executante: document.getElementById('f-executante').value,
+    tecnico: document.getElementById('f-tecnico').value,
+    empresa: document.getElementById('f-empresa').value,
+    paciente: normalizeName(document.getElementById('f-paciente').value),
     solicitante: normalizeName(document.getElementById('f-solicitante').value),
     busca: normalizeName(document.getElementById('f-busca-tabela').value)
   };
@@ -158,10 +177,17 @@ function applyFilters() {
   filteredRows = allRows.filter(r => {
     if (f.dataIni && (!r.dt_requisicao || localDateKey(r.dt_requisicao) < f.dataIni)) return false;
     if (f.dataFim && (!r.dt_requisicao || localDateKey(r.dt_requisicao) > f.dataFim)) return false;
+    if (f.laudoDataIni && (!r.data_laudo || localDateKey(r.data_laudo) < f.laudoDataIni)) return false;
+    if (f.laudoDataFim && (!r.data_laudo || localDateKey(r.data_laudo) > f.laudoDataFim)) return false;
     if (f.convenio && r.convenio !== f.convenio) return false;
     if (f.setor && r.setor !== f.setor) return false;
     if (f.exame && r.exame !== f.exame) return false;
     if (f.situacao && r.situacao !== f.situacao) return false;
+    if (f.laudista && r.laudista !== f.laudista) return false;
+    if (f.executante && r.executante !== f.executante) return false;
+    if (f.tecnico && r.tecnico !== f.tecnico) return false;
+    if (f.empresa && r.empresa !== f.empresa) return false;
+    if (f.paciente && !normalizeName(r.paciente).includes(f.paciente)) return false;
     if (f.solicitante && !normalizeName(r.solicitante).includes(f.solicitante)) return false;
     if (f.busca) {
       const hay = normalizeName([r.paciente, r.exame, r.solicitante, r.laudista, r.convenio].join(' '));
@@ -174,7 +200,12 @@ function applyFilters() {
 }
 
 function limparFiltros() {
-  ['f-data-ini', 'f-data-fim', 'f-convenio', 'f-setor', 'f-exame', 'f-situacao', 'f-solicitante'].forEach(id => {
+  [
+    'f-data-ini', 'f-data-fim', 'f-laudo-data-ini', 'f-laudo-data-fim',
+    'f-convenio', 'f-setor', 'f-exame', 'f-situacao',
+    'f-laudista', 'f-executante', 'f-tecnico', 'f-empresa',
+    'f-paciente', 'f-solicitante'
+  ].forEach(id => {
     document.getElementById(id).value = '';
   });
   applyFilters();
@@ -189,6 +220,7 @@ function renderAll() {
   renderChartConvenio();
   renderChartMedicos();
   renderChartSituacao();
+  renderChartPacientes();
   renderTabela();
 }
 
@@ -332,6 +364,26 @@ function renderChartMedicos() {
   upsertChart('chart-medicos', {
     type: 'bar',
     data: { labels, datasets: [{ data, backgroundColor: '#0b3d91' }] },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
+  });
+}
+
+function renderChartPacientes() {
+  const m = new Map();
+  filteredRows.forEach(r => {
+    if (!r.paciente) return;
+    const key = normalizeName(r.paciente);
+    m.set(key, (m.get(key) || 0) + 1);
+  });
+  const labels = [...m.keys()].sort((a, b) => m.get(b) - m.get(a)).slice(0, 10);
+  const data = labels.map(l => m.get(l));
+  upsertChart('chart-pacientes', {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: '#2563eb' }] },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
@@ -552,12 +604,22 @@ function setupNav() {
 }
 
 function setupFiltros() {
-  ['f-data-ini', 'f-data-fim', 'f-convenio', 'f-setor', 'f-exame', 'f-situacao'].forEach(id => {
+  [
+    'f-data-ini', 'f-data-fim', 'f-laudo-data-ini', 'f-laudo-data-fim',
+    'f-convenio', 'f-setor', 'f-exame', 'f-situacao',
+    'f-laudista', 'f-executante', 'f-tecnico', 'f-empresa'
+  ].forEach(id => {
     document.getElementById(id).addEventListener('change', applyFilters);
   });
+  document.getElementById('f-paciente').addEventListener('input', debounce(applyFilters, 250));
   document.getElementById('f-solicitante').addEventListener('input', debounce(applyFilters, 250));
   document.getElementById('f-busca-tabela').addEventListener('input', debounce(applyFilters, 250));
   document.getElementById('btn-limpar-filtros').addEventListener('click', limparFiltros);
+  document.getElementById('btn-mais-filtros').addEventListener('click', () => {
+    const extra = document.getElementById('filters-extra');
+    extra.hidden = !extra.hidden;
+    document.getElementById('btn-mais-filtros').textContent = extra.hidden ? 'Mais filtros ▾' : 'Menos filtros ▴';
+  });
 }
 
 function debounce(fn, ms) {

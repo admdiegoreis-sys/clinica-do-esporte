@@ -82,6 +82,7 @@ main { padding: 20px 24px 60px; max-width: 1400px; margin: 0 auto; }
 .filter-group label { font-size: 11.5px; font-weight: 700; color: var(--ink-500); text-transform: uppercase; letter-spacing: .03em; }
 .filter-range { display: flex; align-items: center; gap: 6px; }
 .filter-range span { color: var(--ink-500); font-size: 12px; }
+.filters-bar-extra { margin-top: -10px; }
 .filter-actions { align-self: flex-end; }
 
 input[type=text], input[type=date], select {
