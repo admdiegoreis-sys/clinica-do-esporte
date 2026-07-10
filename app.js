@@ -3,6 +3,13 @@ if (window.Chart) {
   Chart.defaults.font.family = "-apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
   Chart.defaults.font.size = 11;
   Chart.defaults.color = '#6b7688';
+  if (window.ChartDataLabels) {
+    Chart.register(ChartDataLabels);
+    Chart.defaults.set('plugins.datalabels', {
+      display: ctx => ctx.dataset.data[ctx.dataIndex] > 0,
+      formatter: v => fmtInt(v)
+    });
+  }
 }
 
 /* ======================= api ======================= */
@@ -308,7 +315,11 @@ function renderChartEvolucao() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      layout: { padding: { top: 18 } },
+      plugins: {
+        legend: { display: false },
+        datalabels: { anchor: 'end', align: 'top', color: '#0b3d91', font: { size: 9, weight: '600' } }
+      },
       scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
     }
   });
@@ -332,7 +343,11 @@ function renderChartSetor() {
     data: { labels, datasets: [{ data, backgroundColor: CHART_COLORS }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      layout: { padding: { top: 18 } },
+      plugins: {
+        legend: { display: false },
+        datalabels: { anchor: 'end', align: 'top', color: '#1a2233', font: { size: 10, weight: '600' } }
+      },
       scales: {
         x: { ticks: { font: { size: 10 }, maxRotation: 35, minRotation: 0, autoSkip: false } },
         y: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } }
@@ -352,7 +367,13 @@ function renderChartCategoria() {
   upsertChart('chart-categoria', {
     type: 'doughnut',
     data: { labels, datasets: [{ data, backgroundColor: CHART_COLORS }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } } }
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+        datalabels: { color: '#fff', font: { size: 11, weight: '700' } }
+      }
+    }
   });
 }
 
@@ -372,7 +393,11 @@ function renderChartConvenio() {
     data: { labels, datasets: [{ data, backgroundColor: '#1f6feb' }] },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      layout: { padding: { right: 26 } },
+      plugins: {
+        legend: { display: false },
+        datalabels: { anchor: 'end', align: 'right', clamp: true, color: '#1a2233', font: { size: 10, weight: '600' } }
+      },
       scales: {
         x: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
         y: { ticks: { font: { size: 10 } } }
@@ -390,7 +415,11 @@ function renderChartMedicos() {
     data: { labels, datasets: [{ data, backgroundColor: '#0b3d91' }] },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      layout: { padding: { right: 26 } },
+      plugins: {
+        legend: { display: false },
+        datalabels: { anchor: 'end', align: 'right', clamp: true, color: '#1a2233', font: { size: 10, weight: '600' } }
+      },
       scales: {
         x: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
         y: { ticks: { font: { size: 10 } } }
@@ -413,7 +442,11 @@ function renderChartPacientes() {
     data: { labels, datasets: [{ data, backgroundColor: '#2563eb' }] },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      layout: { padding: { right: 26 } },
+      plugins: {
+        legend: { display: false },
+        datalabels: { anchor: 'end', align: 'right', clamp: true, color: '#1a2233', font: { size: 10, weight: '600' } }
+      },
       scales: {
         x: { beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
         y: { ticks: { font: { size: 10 } } }
@@ -433,7 +466,11 @@ function renderChartSituacao() {
     data: { labels, datasets: [{ data, backgroundColor: labels.map(l => cores[l] || '#6b7688') }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      layout: { padding: { top: 18 } },
+      plugins: {
+        legend: { display: false },
+        datalabels: { anchor: 'end', align: 'top', color: '#1a2233', font: { size: 10, weight: '600' } }
+      },
       scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
     }
   });
