@@ -135,10 +135,17 @@ function populateFilterOptions() {
   const executantes = [...new Set(allRows.map(r => r.executante).filter(Boolean))].sort();
   const tecnicos = [...new Set(allRows.map(r => r.tecnico).filter(Boolean))].sort();
   const empresas = [...new Set(allRows.map(r => r.empresa).filter(Boolean))].sort();
+  const tiposExame = [...new Set(allRows.map(r => (r.tipo_exame || '').trim().toUpperCase()).filter(Boolean))];
 
   const ordemSituacao = ['Solicitado', 'Em Laudo', 'Laudado', 'Entregue'];
   situacoes.sort((a, b) => {
     const ia = ordemSituacao.indexOf(a), ib = ordemSituacao.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+  const ordemTipoExame = Object.keys(TIPO_EXAME_LABELS);
+  tiposExame.sort((a, b) => {
+    const ia = ordemTipoExame.indexOf(a), ib = ordemTipoExame.indexOf(b);
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
   });
 
@@ -150,6 +157,7 @@ function populateFilterOptions() {
   fillSelect('f-executante', executantes);
   fillSelect('f-tecnico', tecnicos);
   fillSelect('f-empresa', empresas);
+  fillSelect('f-tipo-exame', tiposExame, sigla => TIPO_EXAME_LABELS[sigla] || sigla);
 
   const dl = document.getElementById('dl-solicitantes');
   dl.innerHTML = solicitantes.map(s => `<option value="${escapeHtml(s)}">`).join('');
@@ -158,7 +166,7 @@ function populateFilterOptions() {
   dlPacientes.innerHTML = pacientes.map(p => `<option value="${escapeHtml(p)}">`).join('');
 }
 
-function fillSelect(id, values) {
+function fillSelect(id, values, labelFn) {
   const el = document.getElementById(id);
   const current = el.value;
   const firstOption = el.querySelector('option');
@@ -167,7 +175,7 @@ function fillSelect(id, values) {
   values.forEach(v => {
     const opt = document.createElement('option');
     opt.value = v;
-    opt.textContent = v;
+    opt.textContent = labelFn ? labelFn(v) : v;
     el.appendChild(opt);
   });
   if (values.includes(current)) el.value = current;
@@ -185,6 +193,7 @@ function getFilters() {
     laudoDataFim: document.getElementById('f-laudo-data-fim').value,
     convenio: document.getElementById('f-convenio').value,
     setor: document.getElementById('f-setor').value,
+    tipoExame: document.getElementById('f-tipo-exame').value,
     exame: document.getElementById('f-exame').value,
     situacao: document.getElementById('f-situacao').value,
     laudista: document.getElementById('f-laudista').value,
@@ -206,6 +215,7 @@ function applyFilters() {
     if (f.laudoDataFim && (!r.data_laudo || localDateKey(r.data_laudo) > f.laudoDataFim)) return false;
     if (f.convenio && r.convenio !== f.convenio) return false;
     if (f.setor && r.setor !== f.setor) return false;
+    if (f.tipoExame && (r.tipo_exame || '').trim().toUpperCase() !== f.tipoExame) return false;
     if (f.exame && r.exame !== f.exame) return false;
     if (f.situacao && r.situacao !== f.situacao) return false;
     if (f.laudista && r.laudista !== f.laudista) return false;
@@ -227,7 +237,7 @@ function applyFilters() {
 function limparFiltros() {
   [
     'f-data-ini', 'f-data-fim', 'f-laudo-data-ini', 'f-laudo-data-fim',
-    'f-convenio', 'f-setor', 'f-exame', 'f-situacao',
+    'f-convenio', 'f-setor', 'f-tipo-exame', 'f-exame', 'f-situacao',
     'f-laudista', 'f-executante', 'f-tecnico', 'f-empresa',
     'f-paciente', 'f-solicitante'
   ].forEach(id => {
@@ -674,7 +684,7 @@ function setupNav() {
 function setupFiltros() {
   [
     'f-data-ini', 'f-data-fim', 'f-laudo-data-ini', 'f-laudo-data-fim',
-    'f-convenio', 'f-setor', 'f-exame', 'f-situacao',
+    'f-convenio', 'f-setor', 'f-tipo-exame', 'f-exame', 'f-situacao',
     'f-laudista', 'f-executante', 'f-tecnico', 'f-empresa'
   ].forEach(id => {
     document.getElementById(id).addEventListener('change', applyFilters);
