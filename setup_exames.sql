@@ -10,6 +10,7 @@ create table if not exists public.exames (
   paciente text,
   cp text,
   lado text,
+  tipo_exame text,
   exame text,
   convenio text,
   solicitante text,
@@ -35,6 +36,7 @@ create index if not exists exames_situacao_idx on public.exames(situacao);
 create index if not exists exames_convenio_idx on public.exames(convenio);
 create index if not exists exames_setor_idx on public.exames(setor);
 create index if not exists exames_exame_idx on public.exames(exame);
+create index if not exists exames_tipo_exame_idx on public.exames(tipo_exame);
 create index if not exists exames_solicitante_idx on public.exames(solicitante);
 create index if not exists exames_paciente_idx on public.exames(paciente);
 create index if not exists exames_lote_importacao_idx on public.exames(lote_importacao);

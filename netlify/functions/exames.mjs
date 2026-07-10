@@ -2,7 +2,7 @@ import { getSql, json, quoteIdentifier } from "./_db.mjs";
 
 const COLUMNS = [
   "id_origem", "rex_id", "tipo", "situacao", "exec", "dt_requisicao", "previsao",
-  "paciente", "cp", "lado", "exame", "convenio", "solicitante", "laudista",
+  "paciente", "cp", "lado", "tipo_exame", "exame", "convenio", "solicitante", "laudista",
   "executante", "usuario_resp_rex", "tecnico", "setor", "usuario_digitou",
   "data_hora_digitacao", "log_usuario_laudo", "usuario_resp_laudo", "data_laudo",
   "medico_autenticador", "medico_revisor", "empresa", "lote_importacao",

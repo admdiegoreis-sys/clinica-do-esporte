@@ -72,12 +72,23 @@ function fmtDateTime(d) {
   return dt.toLocaleString('pt-BR');
 }
 
-function categoriaExame(exame) {
-  const prefixo = (exame || '').trim().split(' ')[0].toUpperCase();
+const TIPO_EXAME_LABELS = {
+  'RM': 'Ressonância Magnética',
+  'TC': 'Tomografia Computadorizada',
+  'EN': 'Eletroneuromiografia',
+  'DE': 'Densitometria Óssea'
+};
+
+function categoriaExame(row) {
+  const sigla = (row.tipo_exame || '').trim().toUpperCase();
+  if (sigla) return TIPO_EXAME_LABELS[sigla] || sigla;
+
+  const exame = row.exame || '';
+  const prefixo = exame.trim().split(' ')[0].toUpperCase();
   if (prefixo === 'RM') return 'Ressonância Magnética';
   if (prefixo === 'TC') return 'Tomografia Computadorizada';
   if (prefixo === 'ENMG') return 'Eletroneuromiografia';
-  if ((exame || '').toUpperCase().startsWith('DENSITOMETRIA')) return 'Densitometria Óssea';
+  if (exame.toUpperCase().startsWith('DENSITOMETRIA')) return 'Densitometria Óssea';
   return 'Outros';
 }
 
@@ -333,7 +344,7 @@ function renderChartSetor() {
 function renderChartCategoria() {
   const m = new Map();
   filteredRows.forEach(r => {
-    const c = categoriaExame(r.exame);
+    const c = categoriaExame(r);
     m.set(c, (m.get(c) || 0) + 1);
   });
   const labels = [...m.keys()];
@@ -469,6 +480,7 @@ const HEADER_MAP_RAW = {
   'Paciente': 'paciente',
   'Cp': 'cp',
   'Lado': 'lado',
+  'Tipo exame': 'tipo_exame',
   'Exame': 'exame',
   'Convênio': 'convenio',
   'Solicitante': 'solicitante',
