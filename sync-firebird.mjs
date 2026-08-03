@@ -182,7 +182,9 @@ async function main() {
     total += result.upserted || 0;
     console.log(`Enviado lote ${i + 1}-${Math.min(i + CHUNK, mapped.length)}`);
   }
+  const maxId = Math.max(...mapped.map(r => r.id_origem));
   console.log(`Concluido. Total sincronizado: ${total}`);
+  console.log(`ULTIMO_ID=${maxId}`);
 }
 
 main().catch(err => {
