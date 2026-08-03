@@ -19,6 +19,8 @@ Aplicativo web (MVP) para gestão e visualização dos atendimentos/exames da cl
 - `netlify/functions/exames.mjs` — API (GET lista tudo, POST insere em lote, DELETE limpa a base)
 - `netlify/functions/db-health.mjs` — endpoint simples para testar a conexão com o banco
 - `setup_exames.sql` — script de criação da tabela `exames` (rodar uma vez no editor SQL do Neon)
+- `netlify/functions/sync-ingest.mjs` — endpoint de upsert protegido por chave (`SYNC_API_KEY`), usado pela sincronização automática
+- `sync-firebird.mjs` — script que roda numa máquina com acesso ao banco Firebird de origem (Gesthor), busca exames novos e envia para o `sync-ingest` (ver `sync-firebird.env.example` para as variáveis necessárias)
 - `logo.png` — logo do Hospital Clínica do Esporte
 
 ## Como configurar (primeira vez)
@@ -45,3 +47,13 @@ ID, Rex.ID, Tipo, Situação, Exec., Dt.Requisição, Previsão, Paciente, Cp, L
 ## Importação via XML
 
 Ainda não implementada — o layout exato do XML exportado pelo sistema da clínica precisa ser enviado como modelo para o mapeamento dos campos ser ajustado.
+
+## Sincronização automática com o Firebird (Gesthor)
+
+O sistema de origem da clínica é o **Gesthor Hospitalar**, rodando em um banco **Firebird**. Em vez de exportar/importar Excel manualmente, um script (`sync-firebird.mjs`) roda numa máquina com acesso ao banco (via rede local ou Tailscale), busca os exames novos e envia para `/.netlify/functions/sync-ingest`, que faz *upsert* por `id_origem` (sem duplicar nem precisar apagar tudo).
+
+1. Copie `sync-firebird.env.example` para `.env.local` (não versionado) e preencha `FB_HOST`, `FB_DATABASE` (caminho completo do `.fdb`), `FB_USER`, `FB_PASSWORD` e `SYNC_API_KEY` (mesma chave configurada no Netlify).
+2. Rode `node --env-file=.env.local sync-firebird.mjs`. Ele guarda o maior `EXR_ID` já visto por fora (variável `SYNC_DESDE_ID`) para sincronizar só o que é novo — em produção, isso deve ser automatizado (ex: salvar o último ID sincronizado e agendar via Task Scheduler no Windows).
+3. Consultar por `EXR_ID` (chave primária) em vez de data — o campo de data de digitação não tem índice no banco de origem e torna a consulta extremamente lenta.
+
+**Mapeamento de tabelas do Gesthor** (schema com 700+ tabelas, sem view pronta) está documentado na memória do projeto — ver `sync-firebird.mjs` para a query completa com todos os `JOIN`s já validados contra dados reais.

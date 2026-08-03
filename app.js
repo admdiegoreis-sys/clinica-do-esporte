@@ -82,6 +82,7 @@ function fmtDateTime(d) {
 const TIPO_EXAME_LABELS = {
   'RM': 'Ressonância Magnética',
   'TC': 'Tomografia Computadorizada',
+  'RX': 'Raio-X',
   'EN': 'Eletroneuromiografia',
   'DE': 'Densitometria Óssea'
 };
