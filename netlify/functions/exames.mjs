@@ -16,11 +16,17 @@ function parseBody(event) {
 async function handleGet(sql, params) {
   const limit = Math.min(Number(params.limit) || 5000, 5000);
   const offset = Math.max(Number(params.offset) || 0, 0);
-  const rows = await sql.query(
-    `select * from public.exames order by id asc limit $1 offset $2`,
-    [limit, offset]
-  );
-  return json(200, rows);
+  const rowsPromise = sql.query(`select * from public.exames order by id asc limit $1 offset $2`, [limit, offset]);
+
+  if (offset > 0) {
+    return json(200, { rows: await rowsPromise, total: null });
+  }
+
+  const [rows, countResult] = await Promise.all([
+    rowsPromise,
+    sql.query(`select count(*)::int as total from public.exames`),
+  ]);
+  return json(200, { rows, total: countResult[0].total });
 }
 
 async function handleInsert(sql, rows) {

@@ -116,14 +116,18 @@ const CHART_COLORS = ['#1f6feb', '#4a90e2', '#7dd3fc', '#0b3d91', '#a5b4fc', '#9
 /* ======================= carregamento de dados ======================= */
 async function fetchAllRows() {
   const PAGE = 5000;
-  let all = [];
-  let offset = 0;
-  while (true) {
-    const page = await api(`/exames?limit=${PAGE}&offset=${offset}`);
-    all = all.concat(page);
-    if (page.length < PAGE) break;
-    offset += PAGE;
-  }
+  const first = await api(`/exames?limit=${PAGE}&offset=0`);
+  let all = first.rows;
+  const total = first.total ?? first.rows.length;
+
+  const remainingOffsets = [];
+  for (let offset = PAGE; offset < total; offset += PAGE) remainingOffsets.push(offset);
+
+  const remainingPages = await Promise.all(
+    remainingOffsets.map(offset => api(`/exames?limit=${PAGE}&offset=${offset}`))
+  );
+  remainingPages.forEach(page => { all = all.concat(page.rows); });
+
   return all;
 }
 
