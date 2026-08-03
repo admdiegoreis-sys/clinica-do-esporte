@@ -100,6 +100,11 @@ function categoriaExame(row) {
   return 'Outros';
 }
 
+const ORIGEM_LABELS = {
+  excel: 'Planilha Excel',
+  firebird: 'Banco de dados (Firebird)'
+};
+
 function grupoCategoria(row) {
   if (row.categoria_exame) return row.categoria_exame;
   if ((row.tipo_exame || '').trim()) return 'Imagem';
@@ -142,6 +147,7 @@ function populateFilterOptions() {
   const executantes = [...new Set(allRows.map(r => r.executante).filter(Boolean))].sort();
   const tecnicos = [...new Set(allRows.map(r => r.tecnico).filter(Boolean))].sort();
   const empresas = [...new Set(allRows.map(r => r.empresa).filter(Boolean))].sort();
+  const origens = [...new Set(allRows.map(r => r.origem).filter(Boolean))].sort();
   const tiposExame = [...new Set(allRows.map(r => (r.tipo_exame || '').trim().toUpperCase()).filter(Boolean))];
   const categorias = [...new Set(allRows.map(r => grupoCategoria(r)).filter(Boolean))].sort();
 
@@ -165,6 +171,7 @@ function populateFilterOptions() {
   fillSelect('f-executante', executantes);
   fillSelect('f-tecnico', tecnicos);
   fillSelect('f-empresa', empresas);
+  fillSelect('f-origem', origens, o => ORIGEM_LABELS[o] || o);
   fillSelect('f-tipo-exame', tiposExame, sigla => TIPO_EXAME_LABELS[sigla] || sigla);
   fillSelect('f-categoria', categorias);
 
@@ -210,6 +217,7 @@ function getFilters() {
     executante: document.getElementById('f-executante').value,
     tecnico: document.getElementById('f-tecnico').value,
     empresa: document.getElementById('f-empresa').value,
+    origem: document.getElementById('f-origem').value,
     paciente: normalizeName(document.getElementById('f-paciente').value),
     solicitante: normalizeName(document.getElementById('f-solicitante').value),
     busca: normalizeName(document.getElementById('f-busca-tabela').value)
@@ -233,6 +241,7 @@ function applyFilters() {
     if (f.executante && r.executante !== f.executante) return false;
     if (f.tecnico && r.tecnico !== f.tecnico) return false;
     if (f.empresa && r.empresa !== f.empresa) return false;
+    if (f.origem && r.origem !== f.origem) return false;
     if (f.paciente && !normalizeName(r.paciente).includes(f.paciente)) return false;
     if (f.solicitante && !normalizeName(r.solicitante).includes(f.solicitante)) return false;
     if (f.busca) {
@@ -249,7 +258,7 @@ function limparFiltros() {
   [
     'f-data-ini', 'f-data-fim', 'f-laudo-data-ini', 'f-laudo-data-fim',
     'f-convenio', 'f-setor', 'f-categoria', 'f-tipo-exame', 'f-exame', 'f-situacao',
-    'f-laudista', 'f-executante', 'f-tecnico', 'f-empresa',
+    'f-laudista', 'f-executante', 'f-tecnico', 'f-empresa', 'f-origem',
     'f-paciente', 'f-solicitante'
   ].forEach(id => {
     document.getElementById(id).value = '';
@@ -517,6 +526,7 @@ function renderTabela() {
       <td>${escapeHtml(r.solicitante)}</td>
       <td>${escapeHtml(r.laudista)}</td>
       <td>${fmtDate(r.data_laudo)}</td>
+      <td>${escapeHtml(ORIGEM_LABELS[r.origem] || r.origem)}</td>
     </tr>
   `).join('');
 
@@ -582,7 +592,7 @@ function parseExcelFile(file) {
 }
 
 function mapImportRow(raw, loteId) {
-  const out = { lote_importacao: loteId };
+  const out = { lote_importacao: loteId, origem: 'excel' };
   Object.keys(raw).forEach(header => {
     const col = HEADER_MAP_NORM[normalizeHeader(header)];
     if (!col) return;
@@ -696,7 +706,7 @@ function setupFiltros() {
   [
     'f-data-ini', 'f-data-fim', 'f-laudo-data-ini', 'f-laudo-data-fim',
     'f-convenio', 'f-setor', 'f-categoria', 'f-tipo-exame', 'f-exame', 'f-situacao',
-    'f-laudista', 'f-executante', 'f-tecnico', 'f-empresa'
+    'f-laudista', 'f-executante', 'f-tecnico', 'f-empresa', 'f-origem'
   ].forEach(id => {
     document.getElementById(id).addEventListener('change', applyFilters);
   });

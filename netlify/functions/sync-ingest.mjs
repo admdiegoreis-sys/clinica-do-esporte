@@ -5,7 +5,7 @@ const COLUMNS = [
   "paciente", "cp", "lado", "tipo_exame", "categoria_exame", "exame", "convenio", "solicitante", "laudista",
   "executante", "usuario_resp_rex", "tecnico", "setor", "usuario_digitou",
   "data_hora_digitacao", "log_usuario_laudo", "usuario_resp_laudo", "data_laudo",
-  "medico_autenticador", "medico_revisor", "empresa", "lote_importacao",
+  "medico_autenticador", "medico_revisor", "empresa", "lote_importacao", "origem",
 ];
 
 function parseBody(event) {

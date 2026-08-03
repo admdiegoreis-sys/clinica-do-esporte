@@ -152,6 +152,7 @@ function mapRow(row) {
     medico_revisor: row.MEDICO_REVISOR ? row.MEDICO_REVISOR.trim() : null,
     empresa: row.EMPRESA ? row.EMPRESA.trim() : null,
     lote_importacao: `sync_${new Date().toISOString().replace(/[:.]/g, '-')}`,
+    origem: 'firebird',
   };
 }
 
