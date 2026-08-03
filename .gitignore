@@ -8,3 +8,4 @@ node_modules/
 deno.lock
 .env.local
 run-sql.mjs
+explore-firebird.mjs
