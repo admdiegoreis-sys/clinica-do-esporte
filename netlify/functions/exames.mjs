@@ -13,9 +13,12 @@ function parseBody(event) {
   return JSON.parse(event.body);
 }
 
-async function handleGet(sql) {
+async function handleGet(sql, params) {
+  const limit = Math.min(Number(params.limit) || 5000, 5000);
+  const offset = Math.max(Number(params.offset) || 0, 0);
   const rows = await sql.query(
-    `select * from public.exames order by dt_requisicao desc nulls last`
+    `select * from public.exames order by id asc limit $1 offset $2`,
+    [limit, offset]
   );
   return json(200, rows);
 }
@@ -52,7 +55,7 @@ export async function handler(event) {
     const sql = getSql();
 
     if (event.httpMethod === "GET") {
-      return await handleGet(sql);
+      return await handleGet(sql, event.queryStringParameters || {});
     }
 
     if (event.httpMethod === "POST") {

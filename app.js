@@ -115,7 +115,16 @@ const CHART_COLORS = ['#1f6feb', '#4a90e2', '#7dd3fc', '#0b3d91', '#a5b4fc', '#9
 
 /* ======================= carregamento de dados ======================= */
 async function fetchAllRows() {
-  return api('/exames');
+  const PAGE = 5000;
+  let all = [];
+  let offset = 0;
+  while (true) {
+    const page = await api(`/exames?limit=${PAGE}&offset=${offset}`);
+    all = all.concat(page);
+    if (page.length < PAGE) break;
+    offset += PAGE;
+  }
+  return all;
 }
 
 async function loadData() {
