@@ -100,6 +100,12 @@ function categoriaExame(row) {
   return 'Outros';
 }
 
+function grupoCategoria(row) {
+  if (row.categoria_exame) return row.categoria_exame;
+  if ((row.tipo_exame || '').trim()) return 'Imagem';
+  return 'Outros';
+}
+
 const CHART_COLORS = ['#1f6feb', '#4a90e2', '#7dd3fc', '#0b3d91', '#a5b4fc', '#93c5fd', '#38bdf8', '#60a5fa', '#2563eb', '#93c5fd'];
 
 /* ======================= carregamento de dados ======================= */
@@ -137,6 +143,7 @@ function populateFilterOptions() {
   const tecnicos = [...new Set(allRows.map(r => r.tecnico).filter(Boolean))].sort();
   const empresas = [...new Set(allRows.map(r => r.empresa).filter(Boolean))].sort();
   const tiposExame = [...new Set(allRows.map(r => (r.tipo_exame || '').trim().toUpperCase()).filter(Boolean))];
+  const categorias = [...new Set(allRows.map(r => grupoCategoria(r)).filter(Boolean))].sort();
 
   const ordemSituacao = ['Solicitado', 'Em Laudo', 'Laudado', 'Entregue'];
   situacoes.sort((a, b) => {
@@ -159,6 +166,7 @@ function populateFilterOptions() {
   fillSelect('f-tecnico', tecnicos);
   fillSelect('f-empresa', empresas);
   fillSelect('f-tipo-exame', tiposExame, sigla => TIPO_EXAME_LABELS[sigla] || sigla);
+  fillSelect('f-categoria', categorias);
 
   const dl = document.getElementById('dl-solicitantes');
   dl.innerHTML = solicitantes.map(s => `<option value="${escapeHtml(s)}">`).join('');
@@ -194,6 +202,7 @@ function getFilters() {
     laudoDataFim: document.getElementById('f-laudo-data-fim').value,
     convenio: document.getElementById('f-convenio').value,
     setor: document.getElementById('f-setor').value,
+    categoria: document.getElementById('f-categoria').value,
     tipoExame: document.getElementById('f-tipo-exame').value,
     exame: document.getElementById('f-exame').value,
     situacao: document.getElementById('f-situacao').value,
@@ -216,6 +225,7 @@ function applyFilters() {
     if (f.laudoDataFim && (!r.data_laudo || localDateKey(r.data_laudo) > f.laudoDataFim)) return false;
     if (f.convenio && r.convenio !== f.convenio) return false;
     if (f.setor && r.setor !== f.setor) return false;
+    if (f.categoria && grupoCategoria(r) !== f.categoria) return false;
     if (f.tipoExame && (r.tipo_exame || '').trim().toUpperCase() !== f.tipoExame) return false;
     if (f.exame && r.exame !== f.exame) return false;
     if (f.situacao && r.situacao !== f.situacao) return false;
@@ -238,7 +248,7 @@ function applyFilters() {
 function limparFiltros() {
   [
     'f-data-ini', 'f-data-fim', 'f-laudo-data-ini', 'f-laudo-data-fim',
-    'f-convenio', 'f-setor', 'f-tipo-exame', 'f-exame', 'f-situacao',
+    'f-convenio', 'f-setor', 'f-categoria', 'f-tipo-exame', 'f-exame', 'f-situacao',
     'f-laudista', 'f-executante', 'f-tecnico', 'f-empresa',
     'f-paciente', 'f-solicitante'
   ].forEach(id => {
@@ -685,7 +695,7 @@ function setupNav() {
 function setupFiltros() {
   [
     'f-data-ini', 'f-data-fim', 'f-laudo-data-ini', 'f-laudo-data-fim',
-    'f-convenio', 'f-setor', 'f-tipo-exame', 'f-exame', 'f-situacao',
+    'f-convenio', 'f-setor', 'f-categoria', 'f-tipo-exame', 'f-exame', 'f-situacao',
     'f-laudista', 'f-executante', 'f-tecnico', 'f-empresa'
   ].forEach(id => {
     document.getElementById(id).addEventListener('change', applyFilters);

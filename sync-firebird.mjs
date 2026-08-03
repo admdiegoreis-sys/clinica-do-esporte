@@ -20,6 +20,7 @@ const DESDE_ID = Number(process.env.SYNC_DESDE_ID || 0);
 const SITUACAO_MAP = { S: 'Solicitado', L: 'Laudado', E: 'Entregue', V: 'V', C: 'C', R: 'R' };
 const TIPO_MAP = { X: 'Externo', I: 'Interno' };
 const LADO_MAP = { 0: null, 1: 'ESQ', 2: 'DIR' };
+const CATEGORIA_MAP = { I: 'Imagem', L: 'Laboratório' };
 
 function siglaFromDescricao(desc) {
   const prefixo = (desc || '').trim().split(' ')[0].toUpperCase();
@@ -61,6 +62,7 @@ select
   recent.EXR_LATERALIDADE as LADO_RAW,
   exa.EXA_SIGLA as TIPO_EXAME_RAW,
   exa.EXA_DESCRICAO as EXAME,
+  grx.GRX_TIPO as CATEGORIA_RAW,
   cnv.CNV_NOME as CONVENIO,
   coalesce(mex.MEX_NOME, pes_sol_int.PES_NOME) as SOLICITANTE,
   pes_laud.PES_NOME as LAUDISTA,
@@ -78,6 +80,7 @@ select
   emp.EMP_NOME_FANTASIA as EMPRESA
 from recent
 left join EXAME exa on exa.EXA_ID = recent.EXA_ID
+left join GRUPO_EXAME grx on grx.GRX_ID = exa.GRX_ID
 left join SETOR setor on setor.SET_ID = recent.SET_ID
 left join HISTORICO_ATENDIMENTO hat on hat.HAT_ID = recent.HAT_ID
 left join ATENDIMENTO atd on atd.ATE_ID = hat.ATE_ID
@@ -131,6 +134,7 @@ function mapRow(row) {
     cp: null,
     lado: LADO_MAP[row.LADO_RAW] ?? null,
     tipo_exame: (row.TIPO_EXAME_RAW || '').trim() || siglaFromDescricao(row.EXAME),
+    categoria_exame: CATEGORIA_MAP[row.CATEGORIA_RAW] || row.CATEGORIA_RAW || null,
     exame: row.EXAME ? row.EXAME.trim() : null,
     convenio: row.CONVENIO ? row.CONVENIO.trim() : null,
     solicitante: row.SOLICITANTE ? row.SOLICITANTE.trim() : null,
