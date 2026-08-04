@@ -1,6 +1,7 @@
 *.zip
 *.xlsx
 *.xls
+!docs/*.xlsx
 *.tmp
 .netlify/
 .claude/
