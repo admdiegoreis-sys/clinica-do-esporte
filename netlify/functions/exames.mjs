@@ -1,4 +1,4 @@
-import { getSql, json, quoteIdentifier } from "./_db.mjs";
+import { getSql, json, quoteIdentifier, FILTRO_EMPRESAS } from "./_db.mjs";
 import { requireAuth, requireAdmin } from "./_auth.mjs";
 
 const COLUMNS = [
@@ -27,7 +27,7 @@ const EQ_FILTERS = {
 };
 
 function buildWhere(params) {
-  const clauses = [];
+  const clauses = [FILTRO_EMPRESAS]; // unidades ocultas nunca saem do banco pro navegador
   const values = [];
   const add = (clause, value) => {
     values.push(value);

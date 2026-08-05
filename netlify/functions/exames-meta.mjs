@@ -1,4 +1,4 @@
-import { getSql, json } from "./_db.mjs";
+import { getSql, json, FILTRO_EMPRESAS } from "./_db.mjs";
 import { requireAuth } from "./_auth.mjs";
 
 const DISTINCT_COLUMNS = {
@@ -25,7 +25,8 @@ async function handleAutocomplete(sql, params, event) {
   if (q.length < 2) return json(200, { options: [] }, { event });
 
   const rows = await sql.query(
-    `select distinct ${campo} as v from public.exames where ${campo} ilike $1 order by ${campo} limit 20`,
+    `select distinct ${campo} as v from public.exames
+     where ${campo} ilike $1 and ${FILTRO_EMPRESAS} order by ${campo} limit 20`,
     [`%${q}%`]
   );
   return json(200, { options: rows.map((r) => r.v) }, { event });
@@ -35,7 +36,8 @@ async function handleMeta(sql, event) {
   const distinctEntries = await Promise.all(
     Object.entries(DISTINCT_COLUMNS).map(async ([key, col]) => {
       const rows = await sql.query(
-        `select distinct ${col} as v from public.exames where ${col} is not null and ${col} <> '' order by 1`
+        `select distinct ${col} as v from public.exames
+         where ${col} is not null and ${col} <> '' and ${FILTRO_EMPRESAS} order by 1`
       );
       return [key, rows.map((r) => r.v)];
     })
@@ -43,7 +45,8 @@ async function handleMeta(sql, event) {
 
   const [tipoExameRows, categoriaRows, statusRows, lotesRows] = await Promise.all([
     sql.query(
-      `select distinct upper(trim(tipo_exame)) as v from public.exames where tipo_exame is not null and trim(tipo_exame) <> '' order by 1`
+      `select distinct upper(trim(tipo_exame)) as v from public.exames
+       where tipo_exame is not null and trim(tipo_exame) <> '' and ${FILTRO_EMPRESAS} order by 1`
     ),
     sql.query(`
       select distinct
@@ -53,15 +56,17 @@ async function handleMeta(sql, event) {
           else 'Outros'
         end as v
       from public.exames
+      where ${FILTRO_EMPRESAS}
       order by 1
     `),
     sql.query(
-      `select max(importado_em) as ultima_atualizacao, max(dt_requisicao) as ultimo_registro, count(*)::int as total from public.exames`
+      `select max(importado_em) as ultima_atualizacao, max(dt_requisicao) as ultimo_registro, count(*)::int as total
+       from public.exames where ${FILTRO_EMPRESAS}`
     ),
     sql.query(`
       select lote_importacao, count(*)::int as total, max(importado_em) as data
       from public.exames
-      where lote_importacao is not null
+      where lote_importacao is not null and ${FILTRO_EMPRESAS}
       group by lote_importacao
       order by data desc nulls last
     `),

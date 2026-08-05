@@ -37,3 +37,18 @@ export function json(statusCode, body, options = {}) {
 export function quoteIdentifier(identifier) {
   return `"${identifier.replaceAll('"', '""')}"`;
 }
+
+/* Unidades que ficam FORA do painel a pedido da clinica (2026-08-05).
+   Os dados continuam no banco — isto e' filtro de visualizacao apenas.
+   Para voltar a exibir alguma, basta remover a linha daqui. */
+export const EMPRESAS_OCULTAS = [
+  "BURITI CENTRO MEDICO PARTICIPACAO LTDA",
+  "PLANALTO CENTRO MEDICO E PARTICIPACOES",
+  "FISIOTERAPIA BURITI",
+  "FISIOTERAPIA PLANALTO",
+];
+
+const listaSql = EMPRESAS_OCULTAS.map((e) => `'${e.replaceAll("'", "''")}'`).join(", ");
+
+/** Clausula pronta para concatenar em WHERE (nomes sao constantes internas, nao entrada do usuario). */
+export const FILTRO_EMPRESAS = `(empresa is null or empresa not in (${listaSql}))`;
