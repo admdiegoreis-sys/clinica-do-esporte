@@ -93,7 +93,10 @@ main { padding: 20px 24px 60px; max-width: 1400px; margin: 0 auto; }
 .filters-bar-extra { margin-top: -8px; }
 .filter-actions { align-self: flex-end; }
 
-input[type=text], input[type=date], select {
+/* email/password precisam estar aqui: sem isso caem no estilo nativo do navegador
+   (borda inset cinza, texto preto e fonte Arial) e destoam do resto do app */
+input[type=text], input[type=date], input[type=email], input[type=password],
+input[type=number], input[type=search], select {
   border: 1px solid var(--border);
   border-radius: 7px;
   padding: 8px 10px;
@@ -102,7 +105,9 @@ input[type=text], input[type=date], select {
   background: #fff;
   font-family: inherit;
 }
-input[type=text]:focus, input[type=date]:focus, select:focus {
+input[type=text]:focus, input[type=date]:focus, input[type=email]:focus,
+input[type=password]:focus, input[type=number]:focus, input[type=search]:focus,
+select:focus {
   outline: none;
   border-color: var(--blue-500);
   box-shadow: 0 0 0 3px var(--blue-100);
@@ -215,43 +220,105 @@ tbody tr:hover { background: var(--blue-100); }
 /* ---------- login ---------- */
 .login-view {
   min-height: 100vh;
+  min-height: 100dvh; /* dvh evita o "pulo" da barra de endereco no mobile */
   display: flex;
-  background: var(--bg);
+  background: var(--blue-900);
 }
-.login-hero { position: relative; flex: 1 1 auto; overflow: hidden; }
-.login-hero img { width: 100%; height: 100%; object-fit: cover; object-position: center 40%; display: block; }
-/* leve tint da marca por cima da foto, pra amarrar com a paleta do painel */
+/* foto ocupa a tela inteira como fundo; absoluta de proposito, fora do fluxo, pra nunca
+   ditar a altura da pagina (com height:100% em pai sem altura definida ela caia pro
+   tamanho natural e gerava rolagem) */
+.login-hero { position: absolute; inset: 0; overflow: hidden; }
+.login-hero img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 42%;
+  display: block;
+}
+/* escurece a foto no lado do formulario pro cartao branco destacar sem perder a fachada */
 .login-hero::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(115deg, rgba(11, 61, 145, .45), rgba(31, 111, 235, .12));
+  background:
+    linear-gradient(105deg, rgba(6, 30, 74, .78) 0%, rgba(11, 61, 145, .52) 48%, rgba(31, 111, 235, .28) 100%),
+    linear-gradient(180deg, rgba(6, 30, 74, .30), rgba(6, 30, 74, .10));
 }
 .login-form-side {
-  flex: 0 0 460px;
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 28px;
 }
 .login-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 32px 34px;
+  background: rgba(255, 255, 255, .93);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  backdrop-filter: blur(18px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, .65);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(4, 20, 55, .34), 0 2px 8px rgba(4, 20, 55, .18);
+  padding: 38px 36px 34px;
   width: 100%;
-  max-width: 360px;
+  max-width: 372px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
-.login-logo { height: 44px; width: auto; max-width: 240px; object-fit: contain; align-self: center; margin-bottom: 6px; }
-.login-card h1 { font-size: 16px; text-align: center; margin: 0 0 14px; color: var(--ink-900); }
-.login-card label { font-size: 12px; font-weight: 700; color: var(--ink-500); text-transform: uppercase; letter-spacing: .03em; margin-top: 6px; }
-.login-card input { width: 100%; }
-.login-card .btn-primary { margin-top: 16px; }
-.login-erro { background: #f6e2e2; color: var(--danger); padding: 8px 10px; border-radius: 7px; font-size: 12.5px; }
+.login-logo { height: 50px; width: auto; max-width: 230px; object-fit: contain; align-self: center; }
+.login-card h1 {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  text-align: center;
+  margin: 22px 0 0;
+  color: var(--ink-900);
+}
+.login-sub {
+  font-size: 12.5px;
+  color: var(--ink-500);
+  text-align: center;
+  margin: 5px 0 26px;
+  line-height: 1.4;
+}
+.login-card label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-500);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  margin-bottom: 6px;
+}
+.login-card label + input { margin-bottom: 16px; }
+.login-card input {
+  width: 100%;
+  padding: 11px 13px;
+  font-size: 14px;
+  border-radius: 8px;
+  background: #fff;
+}
+.login-card .btn-primary {
+  margin-top: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: .01em;
+  border-radius: 8px;
+}
+.login-erro {
+  background: #fdeaea;
+  border: 1px solid #f3cccc;
+  color: #b03636;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
 
 /* ---------- usuário logado / trocar senha ---------- */
 .topbar-user { display: flex; align-items: center; gap: 10px; }
@@ -286,8 +353,9 @@ tbody tr:hover { background: var(--blue-100); }
   .topbar { flex-direction: column; gap: 10px; align-items: flex-start; }
 }
 
-/* em telas estreitas a foto sai e o formulario ocupa tudo */
+/* no celular a foto continua de fundo (nao afeta o layout, e absoluta), so o cartao respira menos */
 @media (max-width: 860px) {
-  .login-hero { display: none; }
-  .login-form-side { flex: 1 1 auto; }
+  .login-form-side { padding: 18px; }
+  .login-card { padding: 32px 26px 28px; }
+  .login-hero img { object-position: center 45%; }
 }
