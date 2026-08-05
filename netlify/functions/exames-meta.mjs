@@ -1,4 +1,5 @@
 import { getSql, json } from "./_db.mjs";
+import { requireAuth } from "./_auth.mjs";
 
 const DISTINCT_COLUMNS = {
   convenio: "convenio",
@@ -17,20 +18,20 @@ const AUTOCOMPLETE_FIELDS = {
   solicitante: "solicitante",
 };
 
-async function handleAutocomplete(sql, params) {
+async function handleAutocomplete(sql, params, event) {
   const campo = AUTOCOMPLETE_FIELDS[params.autocomplete];
-  if (!campo) return json(400, { error: "Campo de busca invalido." });
+  if (!campo) return json(400, { error: "Campo de busca invalido." }, { event });
   const q = (params.q || "").trim();
-  if (q.length < 2) return json(200, { options: [] });
+  if (q.length < 2) return json(200, { options: [] }, { event });
 
   const rows = await sql.query(
     `select distinct ${campo} as v from public.exames where ${campo} ilike $1 order by ${campo} limit 20`,
     [`%${q}%`]
   );
-  return json(200, { options: rows.map((r) => r.v) });
+  return json(200, { options: rows.map((r) => r.v) }, { event });
 }
 
-async function handleMeta(sql) {
+async function handleMeta(sql, event) {
   const distinctEntries = await Promise.all(
     Object.entries(DISTINCT_COLUMNS).map(async ([key, col]) => {
       const rows = await sql.query(
@@ -78,20 +79,23 @@ async function handleMeta(sql) {
       total: statusRows[0].total,
     },
     lotes: lotesRows.map((l) => ({ lote: l.lote_importacao, total: l.total, data: l.data })),
-  });
+  }, { event });
 }
 
 export async function handler(event) {
-  if (event.httpMethod === "OPTIONS") return json(204, {});
-  if (event.httpMethod !== "GET") return json(405, { error: "Metodo nao permitido." });
+  if (event.httpMethod === "OPTIONS") return json(204, {}, { event });
+  if (event.httpMethod !== "GET") return json(405, { error: "Metodo nao permitido." }, { event });
+
+  const user = await requireAuth(event);
+  if (!user) return json(401, { error: "Nao autenticado." }, { event });
 
   try {
     const sql = getSql();
     const params = event.queryStringParameters || {};
 
-    if (params.autocomplete) return await handleAutocomplete(sql, params);
-    return await handleMeta(sql);
+    if (params.autocomplete) return await handleAutocomplete(sql, params, event);
+    return await handleMeta(sql, event);
   } catch (error) {
-    return json(500, { error: error.message });
+    return json(500, { error: error.message }, { event });
   }
 }

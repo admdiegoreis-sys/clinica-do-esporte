@@ -14,6 +14,21 @@
 </head>
 <body>
 
+<section id="view-login" class="login-view">
+  <form id="form-login" class="login-card">
+    <img src="logo.png" alt="Hospital Clínica do Esporte" class="login-logo">
+    <h1>Painel de Atendimentos</h1>
+    <label>E-mail</label>
+    <input type="email" id="login-email" autocomplete="username" required>
+    <label>Senha</label>
+    <input type="password" id="login-senha" autocomplete="current-password" required>
+    <div id="login-erro" class="login-erro" hidden></div>
+    <button type="submit" class="btn-primary" id="btn-login">Entrar</button>
+  </form>
+</section>
+
+<div id="app-shell" hidden>
+
 <header class="topbar">
   <div class="topbar-brand">
     <img id="logo" src="logo.png" alt="Hospital Clínica do Esporte" class="brand-logo">
@@ -31,7 +46,31 @@
       <span class="status-value" id="status-ultimo-registro">—</span>
     </div>
   </div>
+  <nav class="topbar-nav" id="topbar-nav">
+    <button class="nav-btn active" data-view="painel">Painel</button>
+    <button class="nav-btn" data-view="acessos" id="nav-btn-acessos" hidden>Gestão de Acessos</button>
+  </nav>
+  <div class="topbar-user">
+    <span id="topbar-user-nome" class="topbar-user-nome"></span>
+    <button id="btn-trocar-senha" class="btn-secondary">Alterar senha</button>
+    <button id="btn-logout" class="btn-secondary">Sair</button>
+  </div>
 </header>
+
+<div id="painel-trocar-senha" class="trocar-senha-painel" hidden>
+  <form id="form-trocar-senha">
+    <h3>Alterar minha senha</h3>
+    <label>Senha atual</label>
+    <input type="password" id="senha-atual" autocomplete="current-password" required>
+    <label>Nova senha (mínimo 8 caracteres)</label>
+    <input type="password" id="senha-nova" autocomplete="new-password" minlength="8" required>
+    <div id="trocar-senha-status" class="trocar-senha-status" hidden></div>
+    <div class="trocar-senha-acoes">
+      <button type="button" id="btn-cancelar-trocar-senha" class="btn-secondary">Cancelar</button>
+      <button type="submit" class="btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
 
 <main>
 
@@ -227,7 +266,67 @@
 
   </section>
 
+  <!-- ===================== GESTÃO DE ACESSOS ===================== -->
+  <section id="view-acessos" class="view">
+
+    <div class="table-card">
+      <h3>Novo usuário</h3>
+      <form id="form-novo-usuario" class="form-inline">
+        <input type="text" id="novo-usuario-nome" placeholder="Nome" required>
+        <input type="email" id="novo-usuario-email" placeholder="E-mail" required>
+        <input type="password" id="novo-usuario-senha" placeholder="Senha (mín. 8 caracteres)" minlength="8" required>
+        <select id="novo-usuario-papel">
+          <option value="usuario">Usuário</option>
+          <option value="admin">Administrador</option>
+        </select>
+        <button type="submit" class="btn-primary">Criar usuário</button>
+      </form>
+      <div id="novo-usuario-status" class="import-status" hidden></div>
+    </div>
+
+    <div class="table-card">
+      <h3>Usuários</h3>
+      <div class="table-scroll">
+        <table id="tabela-usuarios">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>Papel</th>
+              <th>Status</th>
+              <th>Último login</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-usuarios-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <h3>Log de acessos (últimos 200)</h3>
+      <div class="table-scroll">
+        <table id="tabela-logs">
+          <thead>
+            <tr>
+              <th>Data/hora</th>
+              <th>Usuário</th>
+              <th>E-mail tentado</th>
+              <th>Resultado</th>
+              <th>Motivo</th>
+              <th>IP</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-logs-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
 </main>
+
+</div>
 
 <script src="app.js"></script>
 </body>

@@ -1,4 +1,5 @@
 import { getSql, json, quoteIdentifier } from "./_db.mjs";
+import { requireAuth, requireAdmin } from "./_auth.mjs";
 
 const COLUMNS = [
   "id_origem", "rex_id", "tipo", "situacao", "exec", "dt_requisicao", "previsao",
@@ -61,7 +62,7 @@ function buildWhere(params) {
   return { where: clauses.length ? `where ${clauses.join(" and ")}` : "", values };
 }
 
-async function handleGet(sql, params) {
+async function handleGet(sql, params, event) {
   const limit = Math.min(Number(params.limit) || 5000, 5000);
   const offset = Math.max(Number(params.offset) || 0, 0);
   const { where, values } = buildWhere(params);
@@ -70,16 +71,16 @@ async function handleGet(sql, params) {
   const rowsPromise = sql.query(rowsQuery, [...values, limit, offset]);
 
   if (offset > 0) {
-    return json(200, { rows: await rowsPromise, total: null });
+    return json(200, { rows: await rowsPromise, total: null }, { event });
   }
 
   const countQuery = `select count(*)::int as total from public.exames ${where}`;
   const [rows, countResult] = await Promise.all([rowsPromise, sql.query(countQuery, values)]);
-  return json(200, { rows, total: countResult[0].total });
+  return json(200, { rows, total: countResult[0].total }, { event });
 }
 
-async function handleInsert(sql, rows) {
-  if (!Array.isArray(rows) || !rows.length) return json(400, { error: "Nenhum registro enviado." });
+async function handleInsert(sql, rows, event) {
+  if (!Array.isArray(rows) || !rows.length) return json(400, { error: "Nenhum registro enviado." }, { event });
 
   const columnList = COLUMNS.map(quoteIdentifier).join(", ");
   const valuesSql = [];
@@ -95,37 +96,44 @@ async function handleInsert(sql, rows) {
 
   const query = `insert into public.exames (${columnList}) values ${valuesSql.join(", ")}`;
   await sql.query(query, params);
-  return json(200, { inserted: rows.length });
+  return json(200, { inserted: rows.length }, { event });
 }
 
-async function handleDeleteAll(sql) {
+async function handleDeleteAll(sql, event) {
   await sql.query(`delete from public.exames`);
-  return json(200, { deleted: true });
+  return json(200, { deleted: true }, { event });
 }
 
 export async function handler(event) {
-  if (event.httpMethod === "OPTIONS") return json(204, {});
+  if (event.httpMethod === "OPTIONS") return json(204, {}, { event });
 
   try {
-    const sql = getSql();
-
     if (event.httpMethod === "GET") {
-      return await handleGet(sql, event.queryStringParameters || {});
+      const user = await requireAuth(event);
+      if (!user) return json(401, { error: "Nao autenticado." }, { event });
+      const sql = getSql();
+      return await handleGet(sql, event.queryStringParameters || {}, event);
     }
 
     if (event.httpMethod === "POST") {
+      const admin = await requireAdmin(event);
+      if (!admin) return json(403, { error: "Acesso restrito a administradores." }, { event });
+      const sql = getSql();
       const body = parseBody(event);
-      return await handleInsert(sql, body.rows);
+      return await handleInsert(sql, body.rows, event);
     }
 
     if (event.httpMethod === "DELETE") {
+      const admin = await requireAdmin(event);
+      if (!admin) return json(403, { error: "Acesso restrito a administradores." }, { event });
+      const sql = getSql();
       const body = parseBody(event);
-      if (body.all !== true) return json(400, { error: "Confirmacao de exclusao total ausente." });
-      return await handleDeleteAll(sql);
+      if (body.all !== true) return json(400, { error: "Confirmacao de exclusao total ausente." }, { event });
+      return await handleDeleteAll(sql, event);
     }
 
-    return json(405, { error: "Metodo nao permitido." });
+    return json(405, { error: "Metodo nao permitido." }, { event });
   } catch (error) {
-    return json(500, { error: error.message });
+    return json(500, { error: error.message }, { event });
   }
 }

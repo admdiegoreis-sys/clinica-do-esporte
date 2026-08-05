@@ -20,13 +20,19 @@ let currentPage = 1;
 const PAGE_SIZE = 25;
 let evolucaoGranularidade = 'dia';
 let filtroRequestId = 0;
+let currentUser = null;
 const charts = {};
 
 async function api(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
+    credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options
   });
+  if (res.status === 401 && path !== '/auth-login') {
+    showLoginView('Sua sessão expirou. Faça login novamente.');
+    throw new Error('Sessão expirada.');
+  }
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(payload.error || `Erro ${res.status} ao acessar o banco de dados.`);
   return payload;
@@ -672,11 +678,220 @@ function setupPaginacao() {
   document.getElementById('btn-next-page').addEventListener('click', () => { currentPage++; renderTabela(); });
 }
 
+/* ======================= autenticação ======================= */
+let appInitialized = false;
+
+function showLoginView(mensagem) {
+  currentUser = null;
+  document.getElementById('app-shell').hidden = true;
+  document.getElementById('view-login').hidden = false;
+  document.getElementById('painel-trocar-senha').hidden = true;
+  const erroEl = document.getElementById('login-erro');
+  if (mensagem) {
+    erroEl.textContent = mensagem;
+    erroEl.hidden = false;
+  } else {
+    erroEl.hidden = true;
+  }
+}
+
+function onLoginSuccess(usuario) {
+  currentUser = usuario;
+  document.getElementById('view-login').hidden = true;
+  document.getElementById('app-shell').hidden = false;
+  document.getElementById('login-erro').hidden = true;
+  document.getElementById('topbar-user-nome').textContent = usuario.nome;
+  document.getElementById('nav-btn-acessos').hidden = usuario.papel !== 'admin';
+
+  if (!appInitialized) {
+    appInitialized = true;
+    setupFiltros();
+    setupToggleEvolucao();
+    setupPaginacao();
+    setupExportacao();
+    loadData();
+  }
+}
+
+async function checkSession() {
+  try {
+    const { usuario } = await api('/auth-me');
+    onLoginSuccess(usuario);
+  } catch {
+    showLoginView();
+  }
+}
+
+function setupLogin() {
+  document.getElementById('form-login').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value.trim();
+    const senha = document.getElementById('login-senha').value;
+    const erroEl = document.getElementById('login-erro');
+    const btn = document.getElementById('btn-login');
+    erroEl.hidden = true;
+    btn.disabled = true;
+    try {
+      const { usuario } = await api('/auth-login', { method: 'POST', body: JSON.stringify({ email, senha }) });
+      document.getElementById('login-senha').value = '';
+      onLoginSuccess(usuario);
+    } catch (err) {
+      erroEl.textContent = err.message;
+      erroEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+function setupLogout() {
+  document.getElementById('btn-logout').addEventListener('click', async () => {
+    try { await api('/auth-logout', { method: 'POST' }); } catch { /* ignora falha de rede no logout */ }
+    showLoginView();
+  });
+}
+
+function setupTrocarSenha() {
+  const painel = document.getElementById('painel-trocar-senha');
+  const statusEl = document.getElementById('trocar-senha-status');
+
+  document.getElementById('btn-trocar-senha').addEventListener('click', () => {
+    painel.hidden = !painel.hidden;
+  });
+  document.getElementById('btn-cancelar-trocar-senha').addEventListener('click', () => {
+    painel.hidden = true;
+    document.getElementById('form-trocar-senha').reset();
+    statusEl.hidden = true;
+  });
+  document.getElementById('form-trocar-senha').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const senhaAtual = document.getElementById('senha-atual').value;
+    const novaSenha = document.getElementById('senha-nova').value;
+    statusEl.hidden = true;
+    try {
+      await api('/auth-trocar-senha', { method: 'POST', body: JSON.stringify({ senhaAtual, novaSenha }) });
+      statusEl.textContent = 'Senha alterada com sucesso.';
+      statusEl.className = 'trocar-senha-status ok';
+      statusEl.hidden = false;
+      document.getElementById('form-trocar-senha').reset();
+      setTimeout(() => { painel.hidden = true; statusEl.hidden = true; }, 1500);
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.className = 'trocar-senha-status error';
+      statusEl.hidden = false;
+    }
+  });
+}
+
+/* ======================= gestão de acessos ======================= */
+async function loadAcessos() {
+  try {
+    const [{ usuarios }, { logs }] = await Promise.all([api('/usuarios'), api('/usuarios?logs=1')]);
+    renderUsuarios(usuarios);
+    renderLogs(logs);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function renderUsuarios(usuarios) {
+  const body = document.getElementById('tabela-usuarios-body');
+  body.innerHTML = usuarios.map(u => `
+    <tr>
+      <td>${escapeHtml(u.nome)}</td>
+      <td>${escapeHtml(u.email)}</td>
+      <td>${u.papel === 'admin' ? 'Administrador' : 'Usuário'}</td>
+      <td><span class="badge ${u.ativo ? 'badge-ativo' : 'badge-inativo'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
+      <td>${fmtDateTime(u.ultimo_login)}</td>
+      <td>
+        <button class="acao-btn" data-acao="toggle-ativo" data-id="${u.id}" data-ativo="${u.ativo}">${u.ativo ? 'Desativar' : 'Ativar'}</button>
+        <button class="acao-btn" data-acao="toggle-papel" data-id="${u.id}" data-papel="${u.papel}">${u.papel === 'admin' ? 'Tornar usuário' : 'Tornar admin'}</button>
+        <button class="acao-btn danger" data-acao="resetar-senha" data-id="${u.id}">Redefinir senha</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderLogs(logs) {
+  const body = document.getElementById('tabela-logs-body');
+  body.innerHTML = logs.map(l => `
+    <tr>
+      <td>${fmtDateTime(l.criado_em)}</td>
+      <td>${escapeHtml(l.usuario_nome) || '—'}</td>
+      <td>${escapeHtml(l.email_tentativa)}</td>
+      <td><span class="badge ${l.sucesso ? 'badge-sucesso' : 'badge-falha'}">${l.sucesso ? 'Sucesso' : 'Falha'}</span></td>
+      <td>${escapeHtml(l.motivo) || '—'}</td>
+      <td>${escapeHtml(l.ip) || '—'}</td>
+    </tr>
+  `).join('');
+}
+
+function setupAcessos() {
+  document.getElementById('form-novo-usuario').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nome = document.getElementById('novo-usuario-nome').value.trim();
+    const email = document.getElementById('novo-usuario-email').value.trim();
+    const senha = document.getElementById('novo-usuario-senha').value;
+    const papel = document.getElementById('novo-usuario-papel').value;
+    const statusEl = document.getElementById('novo-usuario-status');
+    statusEl.hidden = true;
+    try {
+      await api('/usuarios', { method: 'POST', body: JSON.stringify({ nome, email, senha, papel }) });
+      document.getElementById('form-novo-usuario').reset();
+      statusEl.textContent = 'Usuário criado com sucesso.';
+      statusEl.className = 'import-status ok';
+      statusEl.hidden = false;
+      loadAcessos();
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.className = 'import-status error';
+      statusEl.hidden = false;
+    }
+  });
+
+  document.getElementById('tabela-usuarios-body').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-acao]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    try {
+      if (btn.dataset.acao === 'toggle-ativo') {
+        const ativo = btn.dataset.ativo === 'true';
+        await api('/usuarios', { method: 'PATCH', body: JSON.stringify({ id, ativo: !ativo }) });
+      } else if (btn.dataset.acao === 'toggle-papel') {
+        const papel = btn.dataset.papel === 'admin' ? 'usuario' : 'admin';
+        await api('/usuarios', { method: 'PATCH', body: JSON.stringify({ id, papel }) });
+      } else if (btn.dataset.acao === 'resetar-senha') {
+        const novaSenha = prompt('Digite a nova senha temporaria (minimo 8 caracteres):');
+        if (!novaSenha) return;
+        if (novaSenha.length < 8) { alert('A senha deve ter pelo menos 8 caracteres.'); return; }
+        await api('/usuarios', { method: 'PATCH', body: JSON.stringify({ id, novaSenha }) });
+        alert('Senha redefinida com sucesso.');
+      }
+      loadAcessos();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+}
+
+function setupNav() {
+  document.querySelectorAll('.nav-btn[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav-btn[data-view]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById(`view-${btn.dataset.view}`).classList.add('active');
+      if (btn.dataset.view === 'acessos') loadAcessos();
+    });
+  });
+}
+
 /* ======================= init ======================= */
 window.addEventListener('DOMContentLoaded', () => {
-  setupFiltros();
-  setupToggleEvolucao();
-  setupPaginacao();
-  setupExportacao();
-  loadData();
+  setupLogin();
+  setupLogout();
+  setupNav();
+  setupTrocarSenha();
+  setupAcessos();
+  checkSession();
 });

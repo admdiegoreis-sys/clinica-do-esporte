@@ -209,6 +209,62 @@ tbody tr:hover { background: var(--blue-100); }
 .app-status.error { background: #f6e2e2; color: var(--danger); }
 .app-status.ok { background: #d9f2e6; color: var(--ok); }
 
+/* ---------- login ---------- */
+.login-view {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 20px;
+}
+.login-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 32px 34px;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.login-logo { height: 44px; width: auto; max-width: 240px; object-fit: contain; align-self: center; margin-bottom: 6px; }
+.login-card h1 { font-size: 16px; text-align: center; margin: 0 0 14px; color: var(--ink-900); }
+.login-card label { font-size: 12px; font-weight: 700; color: var(--ink-500); text-transform: uppercase; letter-spacing: .03em; margin-top: 6px; }
+.login-card input { width: 100%; }
+.login-card .btn-primary { margin-top: 16px; }
+.login-erro { background: #f6e2e2; color: var(--danger); padding: 8px 10px; border-radius: 7px; font-size: 12.5px; }
+
+/* ---------- usuário logado / trocar senha ---------- */
+.topbar-user { display: flex; align-items: center; gap: 10px; }
+.topbar-user-nome { font-size: 13px; font-weight: 600; color: var(--ink-700); }
+.trocar-senha-painel {
+  position: fixed; top: 66px; right: 24px; z-index: 30;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0,0,0,.15); padding: 18px 20px; width: 280px;
+}
+.trocar-senha-painel h3 { margin: 0 0 10px; font-size: 14px; }
+.trocar-senha-painel label { display: block; font-size: 11.5px; font-weight: 700; color: var(--ink-500); text-transform: uppercase; margin: 8px 0 4px; }
+.trocar-senha-painel input { width: 100%; }
+.trocar-senha-acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.trocar-senha-status { margin-top: 10px; font-size: 12.5px; padding: 6px 8px; border-radius: 6px; }
+.trocar-senha-status.error { background: #f6e2e2; color: var(--danger); }
+.trocar-senha-status.ok { background: #d9f2e6; color: var(--ok); }
+
+/* ---------- gestão de acessos ---------- */
+.form-inline { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 4px; }
+.form-inline input, .form-inline select { flex: 1; min-width: 140px; }
+.badge-ativo { background: #d9f2e6; color: var(--ok); }
+.badge-inativo { background: #f6e2e2; color: var(--danger); }
+.badge-sucesso { background: #d9f2e6; color: var(--ok); }
+.badge-falha { background: #f6e2e2; color: var(--danger); }
+.acao-btn { border: none; background: var(--blue-100); color: var(--blue-900); padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; margin-right: 6px; }
+.acao-btn:hover { background: #d6e6fb; }
+.acao-btn.danger { background: #f6e2e2; color: var(--danger); }
+.acao-btn.danger:hover { background: #f0cccc; }
+
 @media (max-width: 900px) {
   .charts-grid { grid-template-columns: 1fr; }
   .topbar { flex-direction: column; gap: 10px; align-items: flex-start; }

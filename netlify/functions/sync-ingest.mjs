@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import { getSql, json, quoteIdentifier } from "./_db.mjs";
 
 const COLUMNS = [
@@ -15,11 +16,16 @@ function parseBody(event) {
 
 function checkAuth(event) {
   const provided = event.headers["x-sync-key"] || event.headers["X-Sync-Key"];
-  return provided && process.env.SYNC_API_KEY && provided === process.env.SYNC_API_KEY;
+  const expected = process.env.SYNC_API_KEY;
+  if (!provided || !expected) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
-async function handleUpsert(sql, rows) {
-  if (!Array.isArray(rows) || !rows.length) return json(400, { error: "Nenhum registro enviado." });
+async function handleUpsert(sql, rows, event) {
+  if (!Array.isArray(rows) || !rows.length) return json(400, { error: "Nenhum registro enviado." }, { event });
 
   const columnList = COLUMNS.map(quoteIdentifier).join(", ");
   const updateSet = COLUMNS.filter(c => c !== "id_origem")
@@ -44,14 +50,14 @@ async function handleUpsert(sql, rows) {
     do update set ${updateSet}, importado_em = now()
   `;
   await sql.query(query, params);
-  return json(200, { upserted: rows.length });
+  return json(200, { upserted: rows.length }, { event });
 }
 
 export async function handler(event) {
-  if (event.httpMethod === "OPTIONS") return json(204, {});
+  if (event.httpMethod === "OPTIONS") return json(204, {}, { event });
 
   if (!checkAuth(event)) {
-    return json(401, { error: "Chave de sincronizacao invalida ou ausente." });
+    return json(401, { error: "Chave de sincronizacao invalida ou ausente." }, { event });
   }
 
   try {
@@ -59,11 +65,11 @@ export async function handler(event) {
 
     if (event.httpMethod === "POST") {
       const body = parseBody(event);
-      return await handleUpsert(sql, body.rows);
+      return await handleUpsert(sql, body.rows, event);
     }
 
-    return json(405, { error: "Metodo nao permitido." });
+    return json(405, { error: "Metodo nao permitido." }, { event });
   } catch (error) {
-    return json(500, { error: error.message });
+    return json(500, { error: error.message }, { event });
   }
 }
