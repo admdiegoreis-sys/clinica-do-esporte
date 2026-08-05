@@ -13,7 +13,7 @@ const FB_OPTIONS = {
   lowercase_keys: false,
 };
 
-const API_BASE = process.env.SYNC_API_BASE || 'https://clinicadoesport.netlify.app';
+const API_BASE = process.env.SYNC_API_BASE || 'https://clinicadoesporte.netlify.app';
 const SYNC_API_KEY = process.env.SYNC_API_KEY;
 const DESDE_ID = Number(process.env.SYNC_DESDE_ID || 0);
 
