@@ -19,6 +19,9 @@
 
 * { box-sizing: border-box; }
 
+/* precisa vir antes das regras de display, senao .login-view{display:flex} vence o [hidden] da folha do navegador */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
