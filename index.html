@@ -8,6 +8,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -29,16 +31,14 @@
       <span class="status-value" id="status-ultimo-registro">—</span>
     </div>
   </div>
-  <nav class="topbar-nav">
-    <button class="nav-btn active" data-view="painel">Painel</button>
-    <button class="nav-btn" data-view="importar">Importar dados</button>
-  </nav>
 </header>
 
 <main>
 
   <!-- ===================== PAINEL ===================== -->
   <section id="view-painel" class="view active">
+
+    <div id="app-status" class="app-status" hidden></div>
 
     <div class="filters-bar">
       <div class="filter-group">
@@ -194,6 +194,10 @@
         <h3>Exames (detalhado)</h3>
         <input type="text" id="f-busca-tabela" placeholder="Buscar paciente, exame, médico...">
         <span class="table-count" id="tabela-count"></span>
+        <div class="table-export">
+          <button id="btn-export-excel" class="btn-secondary">Exportar Excel</button>
+          <button id="btn-export-pdf" class="btn-secondary">Exportar PDF</button>
+        </div>
       </div>
       <div class="table-scroll">
         <table id="tabela-exames">
@@ -219,45 +223,6 @@
         <span id="pagina-info"></span>
         <button id="btn-next-page" class="btn-secondary">Próxima</button>
       </div>
-    </div>
-
-  </section>
-
-  <!-- ===================== IMPORTAR ===================== -->
-  <section id="view-importar" class="view">
-
-    <div class="import-card">
-      <h2>Importar planilha (Excel)</h2>
-      <p class="import-hint">Envie o arquivo exportado no layout da aba <strong>Base</strong> (.xlsx). As colunas devem seguir o padrão: ID, Rex.ID, Tipo, Situação, Exec., Dt.Requisição, Previsão, Paciente, Cp, Lado, Tipo exame, Exame, Convênio, Solicitante, Laudista, Executante, Usuário Resp. Rex, Técnico, Setor, Usuário Digitou, Data/Hora Digitação, Log de Usuário Laudo, Usuário Resp. Laudo, Data Laudo, Médico Autenticador, Médico Revisor, Empresa.</p>
-
-      <div class="import-drop" id="drop-excel">
-        <input type="file" id="input-excel" accept=".xlsx,.xls" hidden>
-        <span>Arraste o arquivo .xlsx aqui ou clique para selecionar</span>
-      </div>
-
-      <div class="import-preview" id="import-preview" hidden>
-        <p><strong id="import-preview-count"></strong> registros detectados no arquivo.</p>
-        <div class="import-mode">
-          <label><input type="radio" name="import-mode" value="substituir" checked> Substituir toda a base (recomendado — remove os dados atuais e importa este arquivo)</label>
-          <label><input type="radio" name="import-mode" value="adicionar"> Adicionar aos dados existentes</label>
-        </div>
-        <button id="btn-confirmar-importacao" class="btn-primary">Confirmar importação</button>
-      </div>
-
-      <div id="import-status" class="import-status"></div>
-    </div>
-
-    <div class="import-card">
-      <h2>Importar XML</h2>
-      <p class="import-hint">Importação via XML (mesmo layout da aba Base) — aguardando um arquivo modelo para ajuste do mapeamento de campos. Por enquanto, utilize a importação por Excel acima.</p>
-      <div class="import-drop import-drop-disabled">
-        <span>Em breve</span>
-      </div>
-    </div>
-
-    <div class="import-card">
-      <h2>Histórico de importações</h2>
-      <div id="import-historico" class="import-historico"></div>
     </div>
 
   </section>

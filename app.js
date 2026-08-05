@@ -14,11 +14,12 @@ if (window.Chart) {
 
 /* ======================= api ======================= */
 const API_BASE = '/.netlify/functions';
-let allRows = [];
+let meta = { filtros: {}, status: null, lotes: [] };
 let filteredRows = [];
 let currentPage = 1;
 const PAGE_SIZE = 25;
 let evolucaoGranularidade = 'dia';
+let filtroRequestId = 0;
 const charts = {};
 
 async function api(path, options = {}) {
@@ -38,10 +39,6 @@ function normalizeName(s) {
 }
 
 const DIACRITICS_RE = new RegExp(String.fromCharCode(91, 92, 117, 48, 51, 48, 48, 45, 92, 117, 48, 51, 54, 102, 93), 'g');
-
-function normalizeHeader(h) {
-  return h.toString().normalize('NFD').replace(DIACRITICS_RE, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-}
 
 function slug(s) {
   return (s || '').toString().normalize('NFD').replace(DIACRITICS_RE, '').replace(/\s+/g, '-').toLowerCase();
@@ -105,18 +102,22 @@ const ORIGEM_LABELS = {
   firebird: 'Banco de dados (Firebird)'
 };
 
-function grupoCategoria(row) {
-  if (row.categoria_exame) return row.categoria_exame;
-  if ((row.tipo_exame || '').trim()) return 'Imagem';
-  return 'Outros';
-}
-
 const CHART_COLORS = ['#1f6feb', '#4a90e2', '#7dd3fc', '#0b3d91', '#a5b4fc', '#93c5fd', '#38bdf8', '#60a5fa', '#2563eb', '#93c5fd'];
 
 /* ======================= carregamento de dados ======================= */
-async function fetchAllRows() {
+function buildFilterQuery(f) {
+  const qs = new URLSearchParams();
+  Object.entries(f).forEach(([key, value]) => {
+    if (value) qs.set(key, value);
+  });
+  return qs.toString();
+}
+
+async function fetchFilteredRows(filterParams) {
   const PAGE = 5000;
-  const first = await api(`/exames?limit=${PAGE}&offset=0`);
+  const qs = buildFilterQuery(filterParams);
+  const sep = qs ? '&' : '';
+  const first = await api(`/exames?${qs}${sep}limit=${PAGE}&offset=0`);
   let all = first.rows;
   const total = first.total ?? first.rows.length;
 
@@ -124,66 +125,62 @@ async function fetchAllRows() {
   for (let offset = PAGE; offset < total; offset += PAGE) remainingOffsets.push(offset);
 
   const remainingPages = await Promise.all(
-    remainingOffsets.map(offset => api(`/exames?limit=${PAGE}&offset=${offset}`))
+    remainingOffsets.map(offset => api(`/exames?${qs}${sep}limit=${PAGE}&offset=${offset}`))
   );
   remainingPages.forEach(page => { all = all.concat(page.rows); });
 
   return all;
 }
 
+async function fetchMeta() {
+  return api('/exames-meta');
+}
+
+function showStatus(message, type) {
+  const el = document.getElementById('app-status');
+  if (!el) return;
+  el.textContent = message;
+  el.className = `app-status ${type}`;
+  el.hidden = false;
+}
+
+function hideStatus() {
+  const el = document.getElementById('app-status');
+  if (el) el.hidden = true;
+}
+
 async function loadData() {
-  const statusEl = document.getElementById('import-status');
   try {
-    allRows = await fetchAllRows();
+    meta = await fetchMeta();
+    hideStatus();
   } catch (e) {
     console.error(e);
-    allRows = [];
-    if (statusEl) {
-      statusEl.textContent = 'Erro ao carregar dados: ' + e.message;
-      statusEl.className = 'import-status error';
-    }
+    meta = { filtros: {}, status: null, lotes: [] };
+    showStatus('Erro ao carregar dados: ' + e.message, 'error');
   }
   populateFilterOptions();
-  applyFilters();
-  renderHistoricoImportacoes();
   renderStatusTopo();
+  await applyFilters();
 }
 
 function renderStatusTopo() {
   const atualizacaoEl = document.getElementById('status-atualizacao');
   const ultimoRegistroEl = document.getElementById('status-ultimo-registro');
-  if (!allRows.length) {
+  if (!meta.status) {
     if (atualizacaoEl) atualizacaoEl.textContent = '—';
     if (ultimoRegistroEl) ultimoRegistroEl.textContent = '—';
     return;
   }
-
-  let maxImportado = null;
-  let maxRequisicao = null;
-  allRows.forEach(r => {
-    if (r.importado_em && (!maxImportado || r.importado_em > maxImportado)) maxImportado = r.importado_em;
-    if (r.dt_requisicao && (!maxRequisicao || r.dt_requisicao > maxRequisicao)) maxRequisicao = r.dt_requisicao;
-  });
-
-  if (atualizacaoEl) atualizacaoEl.textContent = fmtDateTime(maxImportado);
-  if (ultimoRegistroEl) ultimoRegistroEl.textContent = fmtDate(maxRequisicao);
+  if (atualizacaoEl) atualizacaoEl.textContent = fmtDateTime(meta.status.ultimaAtualizacao);
+  if (ultimoRegistroEl) ultimoRegistroEl.textContent = fmtDate(meta.status.ultimoRegistro);
 }
 
 /* ======================= filtros ======================= */
 function populateFilterOptions() {
-  const convenios = [...new Set(allRows.map(r => r.convenio).filter(Boolean))].sort();
-  const setores = [...new Set(allRows.map(r => r.setor).filter(Boolean))].sort();
-  const exames = [...new Set(allRows.map(r => r.exame).filter(Boolean))].sort();
-  const situacoes = [...new Set(allRows.map(r => r.situacao).filter(Boolean))];
-  const solicitantes = [...new Set(allRows.map(r => r.solicitante).filter(Boolean))].sort();
-  const pacientes = [...new Set(allRows.map(r => r.paciente).filter(Boolean))].sort();
-  const laudistas = [...new Set(allRows.map(r => r.laudista).filter(Boolean))].sort();
-  const executantes = [...new Set(allRows.map(r => r.executante).filter(Boolean))].sort();
-  const tecnicos = [...new Set(allRows.map(r => r.tecnico).filter(Boolean))].sort();
-  const empresas = [...new Set(allRows.map(r => r.empresa).filter(Boolean))].sort();
-  const origens = [...new Set(allRows.map(r => r.origem).filter(Boolean))].sort();
-  const tiposExame = [...new Set(allRows.map(r => (r.tipo_exame || '').trim().toUpperCase()).filter(Boolean))];
-  const categorias = [...new Set(allRows.map(r => grupoCategoria(r)).filter(Boolean))].sort();
+  const f = meta.filtros || {};
+  const situacoes = [...(f.situacao || [])];
+  const tiposExame = [...(f.tipoExame || [])];
+  const categorias = [...(f.categoria || [])];
 
   const ordemSituacao = ['Solicitado', 'Em Laudo', 'Laudado', 'Entregue'];
   situacoes.sort((a, b) => {
@@ -197,23 +194,28 @@ function populateFilterOptions() {
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
   });
 
-  fillSelect('f-convenio', convenios);
-  fillSelect('f-setor', setores);
-  fillSelect('f-exame', exames);
+  fillSelect('f-convenio', f.convenio || []);
+  fillSelect('f-setor', f.setor || []);
+  fillSelect('f-exame', f.exame || []);
   fillSelect('f-situacao', situacoes);
-  fillSelect('f-laudista', laudistas);
-  fillSelect('f-executante', executantes);
-  fillSelect('f-tecnico', tecnicos);
-  fillSelect('f-empresa', empresas);
-  fillSelect('f-origem', origens, o => ORIGEM_LABELS[o] || o);
+  fillSelect('f-laudista', f.laudista || []);
+  fillSelect('f-executante', f.executante || []);
+  fillSelect('f-tecnico', f.tecnico || []);
+  fillSelect('f-empresa', f.empresa || []);
+  fillSelect('f-origem', f.origem || [], o => ORIGEM_LABELS[o] || o);
   fillSelect('f-tipo-exame', tiposExame, sigla => TIPO_EXAME_LABELS[sigla] || sigla);
   fillSelect('f-categoria', categorias);
+}
 
-  const dl = document.getElementById('dl-solicitantes');
-  dl.innerHTML = solicitantes.map(s => `<option value="${escapeHtml(s)}">`).join('');
-
-  const dlPacientes = document.getElementById('dl-pacientes');
-  dlPacientes.innerHTML = pacientes.map(p => `<option value="${escapeHtml(p)}">`).join('');
+async function updateAutocomplete(campo, inputEl, datalistEl) {
+  const q = inputEl.value.trim();
+  if (q.length < 2) { datalistEl.innerHTML = ''; return; }
+  try {
+    const { options } = await api(`/exames-meta?autocomplete=${campo}&q=${encodeURIComponent(q)}`);
+    datalistEl.innerHTML = options.map(o => `<option value="${escapeHtml(o)}">`).join('');
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 function fillSelect(id, values, labelFn) {
@@ -258,34 +260,30 @@ function getFilters() {
   };
 }
 
-function applyFilters() {
+function setLoading(isLoading) {
+  const tabelaCard = document.querySelector('.table-card');
+  if (tabelaCard) tabelaCard.classList.toggle('is-loading', isLoading);
+  document.querySelectorAll('.chart-card').forEach(c => c.classList.toggle('is-loading', isLoading));
+}
+
+async function applyFilters() {
   const f = getFilters();
-  filteredRows = allRows.filter(r => {
-    if (f.dataIni && (!r.dt_requisicao || localDateKey(r.dt_requisicao) < f.dataIni)) return false;
-    if (f.dataFim && (!r.dt_requisicao || localDateKey(r.dt_requisicao) > f.dataFim)) return false;
-    if (f.laudoDataIni && (!r.data_laudo || localDateKey(r.data_laudo) < f.laudoDataIni)) return false;
-    if (f.laudoDataFim && (!r.data_laudo || localDateKey(r.data_laudo) > f.laudoDataFim)) return false;
-    if (f.convenio && r.convenio !== f.convenio) return false;
-    if (f.setor && r.setor !== f.setor) return false;
-    if (f.categoria && grupoCategoria(r) !== f.categoria) return false;
-    if (f.tipoExame && (r.tipo_exame || '').trim().toUpperCase() !== f.tipoExame) return false;
-    if (f.exame && r.exame !== f.exame) return false;
-    if (f.situacao && r.situacao !== f.situacao) return false;
-    if (f.laudista && r.laudista !== f.laudista) return false;
-    if (f.executante && r.executante !== f.executante) return false;
-    if (f.tecnico && r.tecnico !== f.tecnico) return false;
-    if (f.empresa && r.empresa !== f.empresa) return false;
-    if (f.origem && r.origem !== f.origem) return false;
-    if (f.paciente && !normalizeName(r.paciente).includes(f.paciente)) return false;
-    if (f.solicitante && !normalizeName(r.solicitante).includes(f.solicitante)) return false;
-    if (f.busca) {
-      const hay = normalizeName([r.paciente, r.exame, r.solicitante, r.laudista, r.convenio].join(' '));
-      if (!hay.includes(f.busca)) return false;
-    }
-    return true;
-  });
-  currentPage = 1;
-  renderAll();
+  const requestId = ++filtroRequestId;
+  setLoading(true);
+  try {
+    const rows = await fetchFilteredRows(f);
+    if (requestId !== filtroRequestId) return; // resposta obsoleta, filtros mudaram nesse meio-tempo
+    filteredRows = rows;
+    currentPage = 1;
+    hideStatus();
+    renderAll();
+  } catch (e) {
+    console.error(e);
+    if (requestId !== filtroRequestId) return;
+    showStatus('Erro ao consultar o banco de dados: ' + e.message, 'error');
+  } finally {
+    if (requestId === filtroRequestId) setLoading(false);
+  }
 }
 
 function limparFiltros() {
@@ -570,172 +568,66 @@ function renderTabela() {
   document.getElementById('btn-next-page').disabled = currentPage >= totalPages;
 }
 
-/* ======================= importação Excel ======================= */
-const HEADER_MAP_RAW = {
-  'ID': 'id_origem',
-  'Rex.ID': 'rex_id',
-  'Tipo': 'tipo',
-  'Situação': 'situacao',
-  'Exec.': 'exec',
-  'Dt.Requisição': 'dt_requisicao',
-  'Previsão': 'previsao',
-  'Paciente': 'paciente',
-  'Cp': 'cp',
-  'Lado': 'lado',
-  'Tipo exame': 'tipo_exame',
-  'Exame': 'exame',
-  'Convênio': 'convenio',
-  'Solicitante': 'solicitante',
-  'Laudista': 'laudista',
-  'Executante': 'executante',
-  'Usuário Resp. Rex': 'usuario_resp_rex',
-  'Técnico': 'tecnico',
-  'Setor': 'setor',
-  'Usuário Digitou': 'usuario_digitou',
-  'Data/Hora Digitação': 'data_hora_digitacao',
-  'Log de Usuário Laudo': 'log_usuario_laudo',
-  'Usuário Resp. Laudo': 'usuario_resp_laudo',
-  'Data Laudo': 'data_laudo',
-  'Médico Autenticador': 'medico_autenticador',
-  'Médico Revisor': 'medico_revisor',
-  'Empresa': 'empresa'
-};
-const HEADER_MAP_NORM = {};
-Object.entries(HEADER_MAP_RAW).forEach(([k, v]) => { HEADER_MAP_NORM[normalizeHeader(k)] = v; });
+/* ======================= exportação ======================= */
+const EXPORT_COLUMNS = [
+  { header: 'Data Requisição', get: r => fmtDate(r.dt_requisicao) },
+  { header: 'Paciente', get: r => r.paciente || '' },
+  { header: 'Exame', get: r => r.exame || '' },
+  { header: 'Convênio', get: r => r.convenio || '' },
+  { header: 'Setor', get: r => r.setor || '' },
+  { header: 'Situação', get: r => r.situacao || '' },
+  { header: 'Solicitante', get: r => r.solicitante || '' },
+  { header: 'Laudista', get: r => r.laudista || '' },
+  { header: 'Data Laudo', get: r => fmtDate(r.data_laudo) },
+  { header: 'Origem', get: r => ORIGEM_LABELS[r.origem] || r.origem || '' },
+];
+const PDF_EXPORT_LIMIT = 5000;
 
-const DATE_COLS = new Set(['dt_requisicao', 'previsao', 'data_hora_digitacao', 'data_laudo']);
-const INT_COLS = new Set(['id_origem', 'rex_id']);
-
-let pendingImportRows = null;
-
-function parseExcelFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
-        const sheetName = wb.SheetNames.includes('Base') ? 'Base' : wb.SheetNames[0];
-        const sheet = wb.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
-        resolve(rows);
-      } catch (err) { reject(err); }
-    };
-    reader.onerror = reject;
-    reader.readAsArrayBuffer(file);
+function exportarExcel() {
+  if (!filteredRows.length) { alert('Não há registros para exportar com os filtros atuais.'); return; }
+  const dados = filteredRows.map(r => {
+    const obj = {};
+    EXPORT_COLUMNS.forEach(col => { obj[col.header] = col.get(r); });
+    return obj;
   });
+  const ws = XLSX.utils.json_to_sheet(dados);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Exames');
+  XLSX.writeFile(wb, `exames_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
-function mapImportRow(raw, loteId) {
-  const out = { lote_importacao: loteId, origem: 'excel' };
-  Object.keys(raw).forEach(header => {
-    const col = HEADER_MAP_NORM[normalizeHeader(header)];
-    if (!col) return;
-    let val = raw[header];
-    if (val === undefined || val === '') val = null;
-    if (val !== null && DATE_COLS.has(col)) {
-      val = val instanceof Date ? val.toISOString() : new Date(val).toISOString();
-    } else if (val !== null && INT_COLS.has(col)) {
-      val = parseInt(val, 10);
-      if (isNaN(val)) val = null;
-    } else if (val !== null) {
-      val = val.toString();
-    }
-    out[col] = val;
+function exportarPdf() {
+  if (!filteredRows.length) { alert('Não há registros para exportar com os filtros atuais.'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { alert('Biblioteca de PDF não carregada.'); return; }
+
+  const rows = filteredRows.slice(0, PDF_EXPORT_LIMIT);
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+  doc.setFontSize(12);
+  doc.text('Hospital Clínica do Esporte — Exames', 40, 30);
+  doc.setFontSize(9);
+  const resumo = `Gerado em ${fmtDateTime(new Date())} — ${fmtInt(filteredRows.length)} registro(s)`
+    + (filteredRows.length > PDF_EXPORT_LIMIT ? ` (exibindo os primeiros ${fmtInt(PDF_EXPORT_LIMIT)})` : '');
+  doc.text(resumo, 40, 46);
+
+  doc.autoTable({
+    startY: 58,
+    styles: { fontSize: 7 },
+    headStyles: { fillColor: [31, 111, 235] },
+    head: [EXPORT_COLUMNS.map(c => c.header)],
+    body: rows.map(r => EXPORT_COLUMNS.map(c => c.get(r))),
   });
-  return out;
+
+  doc.save(`exames_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
-async function handleExcelFile(file) {
-  const statusEl = document.getElementById('import-status');
-  statusEl.className = 'import-status';
-  statusEl.textContent = 'Lendo arquivo...';
-  try {
-    const rows = await parseExcelFile(file);
-    if (!rows.length) throw new Error('Nenhum registro encontrado no arquivo.');
-    pendingImportRows = rows;
-    document.getElementById('import-preview-count').textContent = fmtInt(rows.length);
-    document.getElementById('import-preview').hidden = false;
-    statusEl.textContent = '';
-  } catch (err) {
-    console.error(err);
-    statusEl.textContent = 'Erro ao ler o arquivo: ' + err.message;
-    statusEl.className = 'import-status error';
-  }
-}
-
-async function confirmarImportacao() {
-  if (!pendingImportRows) return;
-  const modo = document.querySelector('input[name="import-mode"]:checked').value;
-  const btn = document.getElementById('btn-confirmar-importacao');
-  const statusEl = document.getElementById('import-status');
-  btn.disabled = true;
-  statusEl.className = 'import-status';
-
-  const loteId = `imp_${new Date().toISOString().replace(/[:.]/g, '-')}`;
-  const mapped = pendingImportRows.map(r => mapImportRow(r, loteId));
-
-  try {
-    if (modo === 'substituir') {
-      statusEl.textContent = 'Removendo dados atuais...';
-      await api('/exames', { method: 'DELETE', body: JSON.stringify({ all: true }) });
-    }
-
-    const CHUNK = 500;
-    for (let i = 0; i < mapped.length; i += CHUNK) {
-      statusEl.textContent = `Importando registros ${i + 1} a ${Math.min(i + CHUNK, mapped.length)} de ${mapped.length}...`;
-      await api('/exames', { method: 'POST', body: JSON.stringify({ rows: mapped.slice(i, i + CHUNK) }) });
-    }
-
-    statusEl.textContent = `Importação concluída: ${fmtInt(mapped.length)} registros.`;
-    statusEl.className = 'import-status ok';
-    pendingImportRows = null;
-    document.getElementById('import-preview').hidden = true;
-    document.getElementById('input-excel').value = '';
-    await loadData();
-  } catch (err) {
-    console.error(err);
-    statusEl.textContent = 'Erro na importação: ' + err.message;
-    statusEl.className = 'import-status error';
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-function renderHistoricoImportacoes() {
-  const el = document.getElementById('import-historico');
-  const m = new Map();
-  allRows.forEach(r => {
-    const lote = r.lote_importacao || 'sem-lote';
-    if (!m.has(lote)) m.set(lote, { count: 0, data: r.importado_em });
-    const entry = m.get(lote);
-    entry.count++;
-    if (r.importado_em && (!entry.data || r.importado_em > entry.data)) entry.data = r.importado_em;
-  });
-  const lotes = [...m.entries()].sort((a, b) => (b[1].data || '').localeCompare(a[1].data || ''));
-  if (!lotes.length) {
-    el.innerHTML = '<p class="import-hint">Nenhuma importação realizada ainda.</p>';
-    return;
-  }
-  el.innerHTML = lotes.map(([lote, info]) => `
-    <div class="hist-row">
-      <span>${fmtDateTime(info.data)}</span>
-      <span>${fmtInt(info.count)} registros</span>
-    </div>
-  `).join('');
+function setupExportacao() {
+  document.getElementById('btn-export-excel').addEventListener('click', exportarExcel);
+  document.getElementById('btn-export-pdf').addEventListener('click', exportarPdf);
 }
 
 /* ======================= eventos ======================= */
-function setupNav() {
-  document.querySelectorAll('.nav-btn[data-view]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.nav-btn[data-view]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      document.getElementById(`view-${btn.dataset.view}`).classList.add('active');
-    });
-  });
-}
-
 function setupFiltros() {
   [
     'f-data-ini', 'f-data-fim', 'f-laudo-data-ini', 'f-laudo-data-fim',
@@ -744,9 +636,18 @@ function setupFiltros() {
   ].forEach(id => {
     document.getElementById(id).addEventListener('change', applyFilters);
   });
-  document.getElementById('f-paciente').addEventListener('input', debounce(applyFilters, 250));
-  document.getElementById('f-solicitante').addEventListener('input', debounce(applyFilters, 250));
-  document.getElementById('f-busca-tabela').addEventListener('input', debounce(applyFilters, 250));
+
+  const pacienteInput = document.getElementById('f-paciente');
+  const pacienteDl = document.getElementById('dl-pacientes');
+  pacienteInput.addEventListener('input', debounce(() => updateAutocomplete('paciente', pacienteInput, pacienteDl), 250));
+  pacienteInput.addEventListener('input', debounce(applyFilters, 400));
+
+  const solicitanteInput = document.getElementById('f-solicitante');
+  const solicitanteDl = document.getElementById('dl-solicitantes');
+  solicitanteInput.addEventListener('input', debounce(() => updateAutocomplete('solicitante', solicitanteInput, solicitanteDl), 250));
+  solicitanteInput.addEventListener('input', debounce(applyFilters, 400));
+
+  document.getElementById('f-busca-tabela').addEventListener('input', debounce(applyFilters, 400));
   document.getElementById('btn-limpar-filtros').addEventListener('click', limparFiltros);
 }
 
@@ -771,27 +672,11 @@ function setupPaginacao() {
   document.getElementById('btn-next-page').addEventListener('click', () => { currentPage++; renderTabela(); });
 }
 
-function setupImport() {
-  const drop = document.getElementById('drop-excel');
-  const input = document.getElementById('input-excel');
-  drop.addEventListener('click', () => input.click());
-  drop.addEventListener('dragover', e => { e.preventDefault(); drop.style.borderColor = '#1f6feb'; });
-  drop.addEventListener('dragleave', () => { drop.style.borderColor = ''; });
-  drop.addEventListener('drop', e => {
-    e.preventDefault();
-    drop.style.borderColor = '';
-    if (e.dataTransfer.files.length) handleExcelFile(e.dataTransfer.files[0]);
-  });
-  input.addEventListener('change', () => { if (input.files.length) handleExcelFile(input.files[0]); });
-  document.getElementById('btn-confirmar-importacao').addEventListener('click', confirmarImportacao);
-}
-
 /* ======================= init ======================= */
 window.addEventListener('DOMContentLoaded', () => {
-  setupNav();
   setupFiltros();
   setupToggleEvolucao();
   setupPaginacao();
-  setupImport();
+  setupExportacao();
   loadData();
 });
