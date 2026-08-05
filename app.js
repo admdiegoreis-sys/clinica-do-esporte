@@ -146,6 +146,27 @@ async function loadData() {
   populateFilterOptions();
   applyFilters();
   renderHistoricoImportacoes();
+  renderStatusTopo();
+}
+
+function renderStatusTopo() {
+  const atualizacaoEl = document.getElementById('status-atualizacao');
+  const ultimoRegistroEl = document.getElementById('status-ultimo-registro');
+  if (!allRows.length) {
+    if (atualizacaoEl) atualizacaoEl.textContent = '—';
+    if (ultimoRegistroEl) ultimoRegistroEl.textContent = '—';
+    return;
+  }
+
+  let maxImportado = null;
+  let maxRequisicao = null;
+  allRows.forEach(r => {
+    if (r.importado_em && (!maxImportado || r.importado_em > maxImportado)) maxImportado = r.importado_em;
+    if (r.dt_requisicao && (!maxRequisicao || r.dt_requisicao > maxRequisicao)) maxRequisicao = r.dt_requisicao;
+  });
+
+  if (atualizacaoEl) atualizacaoEl.textContent = fmtDateTime(maxImportado);
+  if (ultimoRegistroEl) ultimoRegistroEl.textContent = fmtDate(maxRequisicao);
 }
 
 /* ======================= filtros ======================= */
