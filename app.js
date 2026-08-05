@@ -29,7 +29,7 @@ async function api(path, options = {}) {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options
   });
-  if (res.status === 401 && path !== '/auth-login') {
+  if (res.status === 401 && path !== '/auth-login' && path !== '/auth-me') {
     showLoginView('Sua sessão expirou. Faça login novamente.');
     throw new Error('Sessão expirada.');
   }
@@ -716,9 +716,9 @@ function onLoginSuccess(usuario) {
 async function checkSession() {
   try {
     const { usuario } = await api('/auth-me');
-    onLoginSuccess(usuario);
+    if (!currentUser) onLoginSuccess(usuario);
   } catch {
-    showLoginView();
+    if (!currentUser) showLoginView();
   }
 }
 
