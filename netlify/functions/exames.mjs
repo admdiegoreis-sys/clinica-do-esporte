@@ -1,5 +1,6 @@
-import { getSql, json, quoteIdentifier, FILTRO_EMPRESAS } from "./_db.mjs";
+import { getSql, json, quoteIdentifier } from "./_db.mjs";
 import { requireAuth, requireAdmin } from "./_auth.mjs";
+import { buildWhere } from "./_filtros.mjs";
 
 const COLUMNS = [
   "id_origem", "rex_id", "tipo", "situacao", "exec", "dt_requisicao", "previsao",
@@ -9,73 +10,40 @@ const COLUMNS = [
   "medico_autenticador", "medico_revisor", "empresa", "lote_importacao", "origem",
 ];
 
+/* So o que a tabela e os relatorios exibem. Trazer as 30 colunas para uma tela que
+   mostra 10 era o que inflava o trafego. Lista fixa = nome de coluna nunca vem do
+   usuario. */
+const CAMPOS_TABELA = [
+  "id", "dt_requisicao", "paciente", "exame", "convenio", "setor",
+  "situacao", "solicitante", "laudista", "data_laudo", "origem",
+];
+
+const LIMITE_TABELA = 200;      // pagina da tela
+const LIMITE_EXPORTACAO = 5000; // lote da exportacao
+
 function parseBody(event) {
   if (!event.body) return {};
   return JSON.parse(event.body);
 }
 
-const EQ_FILTERS = {
-  convenio: "convenio",
-  setor: "setor",
-  exame: "exame",
-  situacao: "situacao",
-  laudista: "laudista",
-  executante: "executante",
-  tecnico: "tecnico",
-  empresa: "empresa",
-  origem: "origem",
-};
-
-function buildWhere(params) {
-  const clauses = [FILTRO_EMPRESAS]; // unidades ocultas nunca saem do banco pro navegador
-  const values = [];
-  const add = (clause, value) => {
-    values.push(value);
-    clauses.push(clause.replace("$$", `$${values.length}`));
-  };
-
-  if (params.dataIni) add(`dt_requisicao >= $$::date`, params.dataIni);
-  if (params.dataFim) add(`dt_requisicao < ($$::date + interval '1 day')`, params.dataFim);
-  if (params.laudoDataIni) add(`data_laudo >= $$::date`, params.laudoDataIni);
-  if (params.laudoDataFim) add(`data_laudo < ($$::date + interval '1 day')`, params.laudoDataFim);
-
-  Object.entries(EQ_FILTERS).forEach(([param, col]) => {
-    if (params[param]) add(`${col} = $$`, params[param]);
-  });
-
-  if (params.tipoExame) add(`upper(trim(tipo_exame)) = $$`, params.tipoExame.toUpperCase());
-  if (params.paciente) add(`paciente ilike $$`, `%${params.paciente}%`);
-  if (params.solicitante) add(`solicitante ilike $$`, `%${params.solicitante}%`);
-  if (params.busca) {
-    add(
-      `(coalesce(paciente,'') || ' ' || coalesce(exame,'') || ' ' || coalesce(solicitante,'') || ' ' || coalesce(laudista,'') || ' ' || coalesce(convenio,'')) ilike $$`,
-      `%${params.busca}%`
-    );
-  }
-  if (params.categoria) {
-    add(
-      `(case when categoria_exame is not null and categoria_exame <> '' then categoria_exame when tipo_exame is not null and trim(tipo_exame) <> '' then 'Imagem' else 'Outros' end) = $$`,
-      params.categoria
-    );
-  }
-
-  return { where: clauses.length ? `where ${clauses.join(" and ")}` : "", values };
+function listaDeCampos(params) {
+  return params.campos === "todos" ? "*" : CAMPOS_TABELA.map(quoteIdentifier).join(", ");
 }
 
 async function handleGet(sql, params, event) {
-  const limit = Math.min(Number(params.limit) || 5000, 5000);
+  const teto = params.modo === "exportacao" ? LIMITE_EXPORTACAO : LIMITE_TABELA;
+  const limit = Math.min(Math.max(Number(params.limit) || 25, 1), teto);
   const offset = Math.max(Number(params.offset) || 0, 0);
   const { where, values } = buildWhere(params);
 
-  const rowsQuery = `select * from public.exames ${where} order by id asc limit $${values.length + 1} offset $${values.length + 2}`;
-  const rowsPromise = sql.query(rowsQuery, [...values, limit, offset]);
+  const rowsQuery = `select ${listaDeCampos(params)} from public.exames ${where}
+                     order by id asc limit $${values.length + 1} offset $${values.length + 2}`;
 
-  if (offset > 0) {
-    return json(200, { rows: await rowsPromise, total: null }, { event });
-  }
+  const [rows, countResult] = await Promise.all([
+    sql.query(rowsQuery, [...values, limit, offset]),
+    sql.query(`select count(*)::int as total from public.exames ${where}`, values),
+  ]);
 
-  const countQuery = `select count(*)::int as total from public.exames ${where}`;
-  const [rows, countResult] = await Promise.all([rowsPromise, sql.query(countQuery, values)]);
   return json(200, { rows, total: countResult[0].total }, { event });
 }
 
@@ -111,25 +79,22 @@ export async function handler(event) {
     if (event.httpMethod === "GET") {
       const user = await requireAuth(event);
       if (!user) return json(401, { error: "Nao autenticado." }, { event });
-      const sql = getSql();
-      return await handleGet(sql, event.queryStringParameters || {}, event);
+      return await handleGet(getSql(), event.queryStringParameters || {}, event);
     }
 
     if (event.httpMethod === "POST") {
       const admin = await requireAdmin(event);
       if (!admin) return json(403, { error: "Acesso restrito a administradores." }, { event });
-      const sql = getSql();
-      const body = parseBody(event);
-      return await handleInsert(sql, body.rows, event);
+      return await handleInsert(getSql(), parseBody(event).rows, event);
     }
 
     if (event.httpMethod === "DELETE") {
       const admin = await requireAdmin(event);
       if (!admin) return json(403, { error: "Acesso restrito a administradores." }, { event });
-      const sql = getSql();
-      const body = parseBody(event);
-      if (body.all !== true) return json(400, { error: "Confirmacao de exclusao total ausente." }, { event });
-      return await handleDeleteAll(sql, event);
+      if (parseBody(event).all !== true) {
+        return json(400, { error: "Confirmacao de exclusao total ausente." }, { event });
+      }
+      return await handleDeleteAll(getSql(), event);
     }
 
     return json(405, { error: "Metodo nao permitido." }, { event });

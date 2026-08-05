@@ -15,7 +15,10 @@ if (window.Chart) {
 /* ======================= api ======================= */
 const API_BASE = '/.netlify/functions';
 let meta = { filtros: {}, status: null, lotes: [] };
-let filteredRows = [];
+let resumo = null;        // KPIs e series dos graficos, ja somados no servidor
+let paginaRows = [];      // apenas as linhas da pagina visivel da tabela
+let totalFiltrado = 0;    // quantas linhas o filtro atual retorna no total
+let filtrosAtuais = {};   // usado pela exportacao, que busca sob demanda
 let currentPage = 1;
 const PAGE_SIZE = 25;
 let evolucaoGranularidade = 'dia';
@@ -60,21 +63,6 @@ function fmtDate(d) {
   return dt.toLocaleDateString('pt-BR');
 }
 
-function localDateKey(d) {
-  if (!d) return null;
-  const dt = new Date(d);
-  if (isNaN(dt)) return null;
-  const y = dt.getFullYear();
-  const m = String(dt.getMonth() + 1).padStart(2, '0');
-  const day = String(dt.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function localMonthKey(d) {
-  const key = localDateKey(d);
-  return key ? key.slice(0, 7) : null;
-}
-
 function fmtDateTime(d) {
   if (!d) return '—';
   const dt = new Date(d);
@@ -89,19 +77,6 @@ const TIPO_EXAME_LABELS = {
   'EN': 'Eletroneuromiografia',
   'DE': 'Densitometria Óssea'
 };
-
-function categoriaExame(row) {
-  const sigla = (row.tipo_exame || '').trim().toUpperCase();
-  if (sigla) return TIPO_EXAME_LABELS[sigla] || sigla;
-
-  const exame = row.exame || '';
-  const prefixo = exame.trim().split(' ')[0].toUpperCase();
-  if (prefixo === 'RM') return 'Ressonância Magnética';
-  if (prefixo === 'TC') return 'Tomografia Computadorizada';
-  if (prefixo === 'ENMG') return 'Eletroneuromiografia';
-  if (exame.toUpperCase().startsWith('DENSITOMETRIA')) return 'Densitometria Óssea';
-  return 'Outros';
-}
 
 const ORIGEM_LABELS = {
   excel: 'Planilha Excel',
@@ -119,23 +94,38 @@ function buildFilterQuery(f) {
   return qs.toString();
 }
 
-async function fetchFilteredRows(filterParams) {
-  const PAGE = 5000;
+/* KPIs e graficos vem somados do servidor; a tabela busca so a pagina visivel.
+   Antes a tela baixava TODAS as linhas do filtro (30 colunas) a cada clique. */
+async function fetchResumo(filterParams) {
+  const qs = buildFilterQuery(filterParams);
+  return api(`/exames-resumo${qs ? '?' + qs : ''}`);
+}
+
+async function fetchPagina(filterParams, pagina) {
   const qs = buildFilterQuery(filterParams);
   const sep = qs ? '&' : '';
-  const first = await api(`/exames?${qs}${sep}limit=${PAGE}&offset=0`);
-  let all = first.rows;
-  const total = first.total ?? first.rows.length;
+  const offset = (pagina - 1) * PAGE_SIZE;
+  return api(`/exames?${qs}${sep}limit=${PAGE_SIZE}&offset=${offset}`);
+}
 
-  const remainingOffsets = [];
-  for (let offset = PAGE; offset < total; offset += PAGE) remainingOffsets.push(offset);
+/** Usado so na exportacao, sob demanda — nunca no fluxo de filtrar. */
+async function fetchTodasAsLinhas(filterParams, aoProgredir) {
+  const LOTE = 5000;
+  const qs = buildFilterQuery(filterParams);
+  const sep = qs ? '&' : '';
+  let todas = [];
+  let offset = 0;
+  let total = null;
 
-  const remainingPages = await Promise.all(
-    remainingOffsets.map(offset => api(`/exames?${qs}${sep}limit=${PAGE}&offset=${offset}`))
-  );
-  remainingPages.forEach(page => { all = all.concat(page.rows); });
+  do {
+    const p = await api(`/exames?${qs}${sep}modo=exportacao&limit=${LOTE}&offset=${offset}`);
+    if (total === null) total = p.total;
+    todas = todas.concat(p.rows);
+    offset += LOTE;
+    if (aoProgredir) aoProgredir(todas.length, total);
+  } while (offset < total);
 
-  return all;
+  return todas;
 }
 
 async function fetchMeta() {
@@ -274,19 +264,41 @@ function setLoading(isLoading) {
 
 async function applyFilters() {
   const f = getFilters();
+  filtrosAtuais = f;
+  currentPage = 1;
   const requestId = ++filtroRequestId;
   setLoading(true);
   try {
-    const rows = await fetchFilteredRows(f);
+    const [r, pagina] = await Promise.all([fetchResumo(f), fetchPagina(f, 1)]);
     if (requestId !== filtroRequestId) return; // resposta obsoleta, filtros mudaram nesse meio-tempo
-    filteredRows = rows;
-    currentPage = 1;
+    resumo = r;
+    paginaRows = pagina.rows;
+    totalFiltrado = pagina.total;
     hideStatus();
     renderAll();
   } catch (e) {
     console.error(e);
     if (requestId !== filtroRequestId) return;
     showStatus('Erro ao consultar o banco de dados: ' + e.message, 'error');
+  } finally {
+    if (requestId === filtroRequestId) setLoading(false);
+  }
+}
+
+/** Troca de pagina busca so aquela pagina; KPIs e graficos nao mudam. */
+async function irParaPagina(pagina) {
+  const requestId = ++filtroRequestId;
+  setLoading(true);
+  try {
+    const p = await fetchPagina(filtrosAtuais, pagina);
+    if (requestId !== filtroRequestId) return;
+    currentPage = pagina;
+    paginaRows = p.rows;
+    totalFiltrado = p.total;
+    renderTabela();
+  } catch (e) {
+    console.error(e);
+    if (requestId === filtroRequestId) showStatus('Erro ao carregar a página: ' + e.message, 'error');
   } finally {
     if (requestId === filtroRequestId) setLoading(false);
   }
@@ -319,27 +331,24 @@ function renderAll() {
 
 /* ======================= KPIs ======================= */
 function renderKpis() {
-  const rows = filteredRows;
-  const total = rows.length;
-  const pacientes = new Set(rows.map(r => normalizeName(r.paciente))).size;
-  const dias = new Set(rows.filter(r => r.dt_requisicao).map(r => localDateKey(r.dt_requisicao))).size;
-  const media = dias > 0 ? total / dias : 0;
+  const k = resumo ? resumo.kpis : null;
+  const txt = (id, v) => { document.getElementById(id).textContent = v; };
+  if (!k) {
+    ['kpi-total', 'kpi-pacientes', 'kpi-dias', 'kpi-media', 'kpi-tempo-laudo', 'kpi-concluido']
+      .forEach(id => txt(id, '—'));
+    return;
+  }
+  txt('kpi-total', fmtInt(k.total));
+  txt('kpi-pacientes', fmtInt(k.pacientes));
+  txt('kpi-dias', fmtInt(k.dias));
+  txt('kpi-media', fmtDec(k.media, 1));
+  txt('kpi-tempo-laudo', k.tempoMedioLaudo === null ? '—' : `${fmtDec(k.tempoMedioLaudo, 1)} dias`);
+  txt('kpi-concluido', `${fmtDec(k.pctConcluido, 1)}%`);
+}
 
-  const temposLaudo = rows
-    .filter(r => r.dt_requisicao && r.data_laudo)
-    .map(r => (new Date(r.data_laudo) - new Date(r.dt_requisicao)) / 86400000)
-    .filter(v => v >= 0);
-  const tempoMedio = temposLaudo.length ? temposLaudo.reduce((a, b) => a + b, 0) / temposLaudo.length : null;
-
-  const concluidos = rows.filter(r => r.situacao === 'Laudado' || r.situacao === 'Entregue').length;
-  const pctConcluido = total ? (concluidos / total) * 100 : 0;
-
-  document.getElementById('kpi-total').textContent = fmtInt(total);
-  document.getElementById('kpi-pacientes').textContent = fmtInt(pacientes);
-  document.getElementById('kpi-dias').textContent = fmtInt(dias);
-  document.getElementById('kpi-media').textContent = fmtDec(media, 1);
-  document.getElementById('kpi-tempo-laudo').textContent = tempoMedio === null ? '—' : `${fmtDec(tempoMedio, 1)} dias`;
-  document.getElementById('kpi-concluido').textContent = `${fmtDec(pctConcluido, 1)}%`;
+/** Series vem do servidor como pares [rotulo, quantidade]. */
+function serie(nome) {
+  return (resumo && resumo.graficos && resumo.graficos[nome]) || [];
 }
 
 /* ======================= charts ======================= */
@@ -350,15 +359,9 @@ function upsertChart(id, config) {
 }
 
 function renderChartEvolucao() {
-  const buckets = new Map();
-  filteredRows.forEach(r => {
-    if (!r.dt_requisicao) return;
-    const key = evolucaoGranularidade === 'mes' ? localMonthKey(r.dt_requisicao) : localDateKey(r.dt_requisicao);
-    if (!key) return;
-    buckets.set(key, (buckets.get(key) || 0) + 1);
-  });
-  const labels = [...buckets.keys()].sort();
-  const data = labels.map(l => buckets.get(l));
+  const pares = serie(evolucaoGranularidade === 'mes' ? 'evolucaoMes' : 'evolucaoDia');
+  const labels = pares.map(p => p[0]);
+  const data = pares.map(p => p[1]);
   const labelsFmt = labels.map(l => {
     const [y, m, d] = l.split('-').map(Number);
     return evolucaoGranularidade === 'mes'
@@ -393,19 +396,10 @@ function renderChartEvolucao() {
   });
 }
 
-function countBy(rows, field) {
-  const m = new Map();
-  rows.forEach(r => {
-    const v = r[field] || '—';
-    m.set(v, (m.get(v) || 0) + 1);
-  });
-  return m;
-}
-
 function renderChartSetor() {
-  const m = countBy(filteredRows, 'setor');
-  const labels = [...m.keys()].sort((a, b) => m.get(b) - m.get(a));
-  const data = labels.map(l => m.get(l));
+  const pares = serie('setor');
+  const labels = pares.map(p => p[0]);
+  const data = pares.map(p => p[1]);
   upsertChart('chart-setor', {
     type: 'bar',
     data: { labels, datasets: [{ data, backgroundColor: CHART_COLORS }] },
@@ -425,13 +419,9 @@ function renderChartSetor() {
 }
 
 function renderChartCategoria() {
-  const m = new Map();
-  filteredRows.forEach(r => {
-    const c = categoriaExame(r);
-    m.set(c, (m.get(c) || 0) + 1);
-  });
-  const labels = [...m.keys()];
-  const data = labels.map(l => m.get(l));
+  const pares = serie('categoria');
+  const labels = pares.map(p => p[0]);
+  const data = pares.map(p => p[1]);
   upsertChart('chart-categoria', {
     type: 'doughnut',
     data: { labels, datasets: [{ data, backgroundColor: CHART_COLORS }] },
@@ -446,15 +436,13 @@ function renderChartCategoria() {
 }
 
 function renderChartConvenio() {
-  const m = countBy(filteredRows, 'convenio');
-  let labels = [...m.keys()].sort((a, b) => m.get(b) - m.get(a));
-  let data = labels.map(l => m.get(l));
+  const pares = serie('convenio'); // ja vem ordenado desc do servidor
+  let labels = pares.map(p => p[0]);
+  let data = pares.map(p => p[1]);
   if (labels.length > 8) {
-    const top = labels.slice(0, 8);
-    const topData = data.slice(0, 8);
     const outros = data.slice(8).reduce((a, b) => a + b, 0);
-    labels = [...top, 'Outros'];
-    data = [...topData, outros];
+    labels = [...labels.slice(0, 8), 'Outros'];
+    data = [...data.slice(0, 8), outros];
   }
   upsertChart('chart-convenio', {
     type: 'bar',
@@ -475,9 +463,9 @@ function renderChartConvenio() {
 }
 
 function renderChartMedicos() {
-  const m = countBy(filteredRows, 'solicitante');
-  const labels = [...m.keys()].sort((a, b) => m.get(b) - m.get(a)).slice(0, 10);
-  const data = labels.map(l => m.get(l));
+  const pares = serie('medicos'); // top 10, ja ordenado no servidor
+  const labels = pares.map(p => p[0]);
+  const data = pares.map(p => p[1]);
   upsertChart('chart-medicos', {
     type: 'bar',
     data: { labels, datasets: [{ data, backgroundColor: '#0b3d91' }] },
@@ -497,14 +485,9 @@ function renderChartMedicos() {
 }
 
 function renderChartPacientes() {
-  const m = new Map();
-  filteredRows.forEach(r => {
-    if (!r.paciente) return;
-    const key = normalizeName(r.paciente);
-    m.set(key, (m.get(key) || 0) + 1);
-  });
-  const labels = [...m.keys()].sort((a, b) => m.get(b) - m.get(a)).slice(0, 10);
-  const data = labels.map(l => m.get(l));
+  const pares = serie('pacientes'); // top 10, ja ordenado no servidor
+  const labels = pares.map(p => p[0]);
+  const data = pares.map(p => p[1]);
   upsertChart('chart-pacientes', {
     type: 'bar',
     data: { labels, datasets: [{ data, backgroundColor: '#2563eb' }] },
@@ -525,7 +508,7 @@ function renderChartPacientes() {
 
 function renderChartSituacao() {
   const ordem = ['Solicitado', 'Em Laudo', 'Laudado', 'Entregue'];
-  const m = countBy(filteredRows, 'situacao');
+  const m = new Map(serie('situacao'));
   const labels = ordem.filter(l => m.has(l)).concat([...m.keys()].filter(l => !ordem.includes(l)));
   const data = labels.map(l => m.get(l));
   const cores = { 'Solicitado': '#d94c4c', 'Em Laudo': '#d98c1c', 'Laudado': '#1a9c6b', 'Entregue': '#1f6feb' };
@@ -546,14 +529,11 @@ function renderChartSituacao() {
 
 /* ======================= tabela ======================= */
 function renderTabela() {
-  const total = filteredRows.length;
+  const total = totalFiltrado;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  if (currentPage > totalPages) currentPage = totalPages;
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const pageRows = filteredRows.slice(start, start + PAGE_SIZE);
 
   const body = document.getElementById('tabela-exames-body');
-  body.innerHTML = pageRows.map(r => `
+  body.innerHTML = paginaRows.map(r => `
     <tr>
       <td>${fmtDate(r.dt_requisicao)}</td>
       <td>${escapeHtml(r.paciente)}</td>
@@ -589,43 +569,65 @@ const EXPORT_COLUMNS = [
 ];
 const PDF_EXPORT_LIMIT = 5000;
 
+/* A exportacao e' o unico ponto que legitimamente precisa de todas as linhas —
+   por isso ela as busca aqui, no clique, e nao mais a cada filtro digitado. */
+async function comLinhasCompletas(botaoId, rotuloOriginal, tarefa) {
+  const btn = document.getElementById(botaoId);
+  if (!totalFiltrado) { alert('Não há registros para exportar com os filtros atuais.'); return; }
+  btn.disabled = true;
+  try {
+    const linhas = await fetchTodasAsLinhas(filtrosAtuais, (carregadas, total) => {
+      btn.textContent = `Baixando ${fmtInt(carregadas)}/${fmtInt(total)}...`;
+    });
+    btn.textContent = 'Gerando arquivo...';
+    await tarefa(linhas);
+  } catch (e) {
+    console.error(e);
+    alert('Erro ao exportar: ' + e.message);
+  } finally {
+    btn.textContent = rotuloOriginal;
+    btn.disabled = false;
+  }
+}
+
 function exportarExcel() {
-  if (!filteredRows.length) { alert('Não há registros para exportar com os filtros atuais.'); return; }
-  const dados = filteredRows.map(r => {
-    const obj = {};
-    EXPORT_COLUMNS.forEach(col => { obj[col.header] = col.get(r); });
-    return obj;
+  return comLinhasCompletas('btn-export-excel', 'Exportar Excel', (linhas) => {
+    const dados = linhas.map(r => {
+      const obj = {};
+      EXPORT_COLUMNS.forEach(col => { obj[col.header] = col.get(r); });
+      return obj;
+    });
+    const ws = XLSX.utils.json_to_sheet(dados);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Exames');
+    XLSX.writeFile(wb, `exames_${new Date().toISOString().slice(0, 10)}.xlsx`);
   });
-  const ws = XLSX.utils.json_to_sheet(dados);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Exames');
-  XLSX.writeFile(wb, `exames_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 function exportarPdf() {
-  if (!filteredRows.length) { alert('Não há registros para exportar com os filtros atuais.'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { alert('Biblioteca de PDF não carregada.'); return; }
+  return comLinhasCompletas('btn-export-pdf', 'Exportar PDF', (linhas) => {
+    const rows = linhas.slice(0, PDF_EXPORT_LIMIT);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
 
-  const rows = filteredRows.slice(0, PDF_EXPORT_LIMIT);
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    doc.setFontSize(12);
+    doc.text('Hospital Clínica do Esporte — Exames', 40, 30);
+    doc.setFontSize(9);
+    const subtitulo = `Gerado em ${fmtDateTime(new Date())} — ${fmtInt(linhas.length)} registro(s)`
+      + (linhas.length > PDF_EXPORT_LIMIT ? ` (exibindo os primeiros ${fmtInt(PDF_EXPORT_LIMIT)})` : '');
+    doc.text(subtitulo, 40, 46);
 
-  doc.setFontSize(12);
-  doc.text('Hospital Clínica do Esporte — Exames', 40, 30);
-  doc.setFontSize(9);
-  const resumo = `Gerado em ${fmtDateTime(new Date())} — ${fmtInt(filteredRows.length)} registro(s)`
-    + (filteredRows.length > PDF_EXPORT_LIMIT ? ` (exibindo os primeiros ${fmtInt(PDF_EXPORT_LIMIT)})` : '');
-  doc.text(resumo, 40, 46);
+    doc.autoTable({
+      startY: 58,
+      styles: { fontSize: 7 },
+      headStyles: { fillColor: [31, 111, 235] },
+      head: [EXPORT_COLUMNS.map(c => c.header)],
+      body: rows.map(r => EXPORT_COLUMNS.map(c => c.get(r))),
+    });
 
-  doc.autoTable({
-    startY: 58,
-    styles: { fontSize: 7 },
-    headStyles: { fillColor: [31, 111, 235] },
-    head: [EXPORT_COLUMNS.map(c => c.header)],
-    body: rows.map(r => EXPORT_COLUMNS.map(c => c.get(r))),
+    doc.save(`exames_${new Date().toISOString().slice(0, 10)}.pdf`);
   });
-
-  doc.save(`exames_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
 function setupExportacao() {
@@ -674,8 +676,13 @@ function setupToggleEvolucao() {
 }
 
 function setupPaginacao() {
-  document.getElementById('btn-prev-page').addEventListener('click', () => { currentPage--; renderTabela(); });
-  document.getElementById('btn-next-page').addEventListener('click', () => { currentPage++; renderTabela(); });
+  document.getElementById('btn-prev-page').addEventListener('click', () => {
+    if (currentPage > 1) irParaPagina(currentPage - 1);
+  });
+  document.getElementById('btn-next-page').addEventListener('click', () => {
+    const totalPages = Math.max(1, Math.ceil(totalFiltrado / PAGE_SIZE));
+    if (currentPage < totalPages) irParaPagina(currentPage + 1);
+  });
 }
 
 /* ======================= autenticação ======================= */
